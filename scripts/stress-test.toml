@@ -50,9 +50,6 @@ scale = "limit"
 cpu = "constant"
 rss = "linear"
 
-[cases.known]
-"follow-file.cpu" = "#1693"
-
 [[cases]]
 name = "unterminated-long-line"
 about = "A line over the limit at the end of the input, with no delimiter after it"

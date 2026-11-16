@@ -43,7 +43,7 @@ use crate::{
     output::{BufFactory, Chunk, OutputBuf},
     query::Query,
     scanning::{
-        Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, Segment, SegmentBuf,
+        Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, SearchProgress, Segment, SegmentBuf,
         SegmentBufFactory,
     },
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
@@ -1239,7 +1239,7 @@ struct BlockScanner<'a, D: Delimit> {
     max_segment_size: usize,
     block: usize,
     offset: u64,
-    tail: Vec<u8>,
+    tail: HeldTail,
     open: bool,
 }
 
@@ -1251,7 +1251,7 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
             max_segment_size,
             block: 0,
             offset: 0,
-            tail: Vec::new(),
+            tail: HeldTail::default(),
             open: false,
         }
     }
@@ -1287,7 +1287,7 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
                 self.max_segment_size,
             ))
         } else {
-            chained.insert(Cursor::new(tail).chain(stream))
+            chained.insert(Cursor::new(tail.data).chain(stream))
         };
         let items = self
             .scanner
@@ -1333,12 +1333,25 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
 
 // ---
 
+/// Data held back by a [`TailHoldingReader`] for the next scan, with what its search for the delimiter found out.
+#[derive(Default)]
+struct HeldTail {
+    data: Vec<u8>,
+    progress: SearchProgress,
+}
+
+// ---
+
 /// Reads a previously held tail followed by an inner stream, and holds back the
 /// data after the last delimiter once the inner stream reaches its end.
 ///
 /// The held data stops growing at `limit` bytes after the last delimiter: a line
 /// that long is passed on even if unterminated, as the scanner would split it
 /// into parts anyway.
+///
+/// The held data is searched for the delimiter only where it has grown since it was last searched,
+/// in this or a previous scan, as a tail that grows to the limit would otherwise be searched again
+/// with each chunk read.
 struct TailHoldingReader<'a, S> {
     inner: &'a mut dyn Read,
     searcher: &'a S,
@@ -1347,34 +1360,56 @@ struct TailHoldingReader<'a, S> {
     // `buf[pos..ready]` can be passed on, `buf[ready..]` is held back.
     pos: usize,
     ready: usize,
+    // What the search for the delimiter in `buf` found out, see [`Search::search_r_incremental`].
+    progress: SearchProgress,
 }
 
 impl<'a, S: Search> TailHoldingReader<'a, S> {
     const CHUNK_SIZE: usize = 64 * 1024;
 
-    fn new(tail: Vec<u8>, inner: &'a mut dyn Read, searcher: &'a S, limit: usize) -> Self {
+    /// Returns a reader of `tail` followed by `inner`.
+    fn new(tail: HeldTail, inner: &'a mut dyn Read, searcher: &'a S, limit: usize) -> Self {
         Self {
             inner,
             searcher,
             limit,
-            buf: tail,
+            buf: tail.data,
             pos: 0,
             ready: 0,
+            progress: tail.progress,
         }
     }
 
-    fn into_tail(mut self) -> Vec<u8> {
-        self.buf.drain(..self.pos);
-        self.buf
+    /// Returns the data that has not been read.
+    fn into_tail(mut self) -> HeldTail {
+        self.drop_read();
+        HeldTail {
+            data: self.buf,
+            progress: self.progress,
+        }
+    }
+
+    /// Drops the data that has been read.
+    fn drop_read(&mut self) {
+        if self.pos != 0 {
+            self.buf.drain(..self.pos);
+            self.ready -= self.pos;
+            self.pos = 0;
+            // The search depends on the data before a delimiter, so what it found out no longer holds.
+            self.progress = SearchProgress::default();
+        }
     }
 }
 
 impl<S: Search> Read for TailHoldingReader<'_, S> {
     fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        // Nothing can be passed on to an empty buffer, so the inner stream is left for the next read.
+        if out.is_empty() {
+            return Ok(0);
+        }
+
         while self.pos == self.ready {
-            self.buf.drain(..self.pos);
-            self.pos = 0;
-            self.ready = 0;
+            self.drop_read();
 
             let len = self.buf.len();
             self.buf.resize(len + Self::CHUNK_SIZE, 0);
@@ -1384,7 +1419,12 @@ impl<S: Search> Read for TailHoldingReader<'_, S> {
                 return Ok(0);
             }
 
-            let end = self.searcher.search_r(&self.buf, true).map(|r| r.end).unwrap_or(0);
+            let found = self.searcher.search_r_incremental(&self.buf, &mut self.progress);
+            if found.is_some() {
+                // The next search starts over, whether or not the data before the delimiter is read by then.
+                self.progress = SearchProgress::default();
+            }
+            let end = found.map(|r| r.end).unwrap_or(0);
             self.ready = if self.buf.len() - end >= self.limit {
                 self.buf.len()
             } else {

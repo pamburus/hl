@@ -21,7 +21,7 @@ use crate::{
     level::{InfallibleLevel, Level},
     model::{FieldFilterSet, RecordWithSource},
     output::{BufFactory, OutputBuf},
-    scanning::{PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
+    scanning::{NewlineSearcher, PartialPlacement, SearchProgress, Segment, SegmentBuf, SegmentBufFactory},
     settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
     syntax::*,
     themecfg,
@@ -239,6 +239,53 @@ fn merge(sync_interval: Duration, messages: Vec<Processed>) -> String {
     let mut output = Vec::new();
     app.merge_segments(&test_badges(2), rxo, &mut output, 1).unwrap();
     String::from_utf8(output).unwrap()
+}
+
+/// A new line delimiter that counts the bytes searched for it.
+#[derive(Clone, Default)]
+struct CountingNewline(Arc<AtomicUsize>);
+
+impl CountingNewline {
+    fn searched(&self) -> usize {
+        self.0.load(Ordering::Relaxed)
+    }
+
+    fn count(&self, buf: &[u8]) {
+        self.0.fetch_add(buf.len(), Ordering::Relaxed);
+    }
+}
+
+impl Delimit for CountingNewline {
+    type Searcher = Self;
+
+    fn into_searcher(self) -> Self {
+        self
+    }
+}
+
+impl Search for CountingNewline {
+    fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
+        self.count(buf);
+        NewlineSearcher.search_r(buf, edge)
+    }
+
+    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
+        self.count(&buf[progress.end()..]);
+        NewlineSearcher.search_r_incremental(buf, progress)
+    }
+
+    fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
+        self.count(buf);
+        NewlineSearcher.search_l(buf, edge)
+    }
+
+    fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
+        NewlineSearcher.partial_match_r(buf)
+    }
+
+    fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
+        NewlineSearcher.partial_match_l(buf)
+    }
 }
 
 /// Scans each chunk as a separate follow mode scan and returns the segments sent after each of them.
@@ -3392,6 +3439,70 @@ fn test_block_scanner_holds_short_tail_after_long_data() {
 
     assert_eq!(scanned[0].concat(), "a1\na2\na3\n");
     assert_eq!(scanned[1], vec!["bc\n".to_owned()]);
+}
+
+#[rstest]
+#[case::byte(Delimiter::Byte(b'\n'), b"a\n", b"a\n")]
+#[case::str(Delimiter::Str("\n".into()), b"a\n", b"a\n")]
+#[case::newline(Delimiter::Newline, b"a\n", b"a\n")]
+#[case::pretty_compatible(Delimiter::PrettyCompatible, b"a\n", b"a\n")]
+#[case::json(Delimiter::Json, b"{}\n{}", b"{}\n")]
+fn test_tail_holding_reader_keeps_delimiter_after_empty_read(
+    #[case] delimiter: Delimiter,
+    #[case] data: &[u8],
+    #[case] expected: &[u8],
+) {
+    // A read into an empty buffer, as the scanner does after its last segment, keeps what
+    // it would have passed on for the next scan, which passes it on once the file grows.
+    let searcher = delimiter.into_searcher();
+    let mut inner = Cursor::new(data);
+
+    let mut reader = TailHoldingReader::new(HeldTail::default(), &mut inner, &searcher, 1024);
+    assert_eq!(reader.read(&mut []).unwrap(), 0);
+    let tail = reader.into_tail();
+
+    let mut grown = (&mut inner).chain(&b"x"[..]);
+    let mut reader = TailHoldingReader::new(tail, &mut grown, &searcher, 1024);
+    let mut out = Vec::new();
+    reader.read_to_end(&mut out).unwrap();
+    assert_eq!(out, expected);
+}
+
+#[rstest]
+fn test_block_scanner_searches_held_tail_once(#[values(1, 64)] scans: usize, #[values(false, true)] terminated: bool) {
+    // An unterminated tail held back while it grows is not searched again for the delimiter
+    // each time it grows, in a single scan or across scans.
+    const CHUNKS: usize = 64;
+    const CHUNK: usize = 64 * 1024;
+
+    let line = "x".repeat(CHUNKS * CHUNK);
+    let end = if terminated { "\n" } else { "" };
+    let delimiter = CountingNewline::default();
+    let sfi = Arc::new(SegmentBufFactory::new(CHUNK));
+    let scanner = Scanner::new(sfi, delimiter.clone());
+    let (txi, rxi) = channel::unbounded();
+    let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), 2 * line.len());
+
+    let mut sent = Vec::new();
+    let data = format!("{line}{end}");
+    for chunk in data.as_bytes().chunks(data.len().div_ceil(scans)) {
+        blocks.scan(&mut Cursor::new(chunk), 0, &txi, true).unwrap();
+        sent.extend(rxi.try_iter().map(|(_, _, _, segment)| segment.data().to_vec()));
+    }
+    let held = delimiter.searched();
+    blocks.scan(&mut std::io::empty(), 0, &txi, false).unwrap();
+    sent.extend(rxi.try_iter().map(|(_, _, _, segment)| segment.data().to_vec()));
+
+    assert!(
+        held <= 2 * data.len(),
+        "{held} bytes searched to hold {} bytes",
+        data.len()
+    );
+    assert!(
+        sent.concat() == data.as_bytes(),
+        "unexpected data of {} bytes",
+        sent.concat().len()
+    );
 }
 
 #[test]
