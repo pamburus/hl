@@ -82,6 +82,7 @@ Compares the wall-clock time of the benchmarks of the working tree with those of
 - **Head**: runs the benchmarks of the working tree with `--baseline-lenient`, so benchmarks the base does not have are measured without failing the run. Criterion decides whether a difference is beyond the noise.
 - **Benchmarks**: skips the reference benchmarks, which measure third-party code and language or library primitives, by setting `HL_BENCH_NO_REFERENCE`.
 - **Results**: kept in the `criterion` directory of the target directory of the working tree; the baseline of an earlier run is removed first.
+- **Reuse**: each run of the base benchmarks is also stored in `hl-bench-compare` in the git common directory, keyed by the base commit, a hash of the benchmark executable, which covers the toolchain, the build flags and the features, and the criterion arguments. With `--reuse-base`, or with `HL_BENCH_REUSE_BASE` set, a stored run with the same key is used instead of running the base benchmarks again, and its age is shown. It saves time when the working tree changes and the base does not, but the base was measured under the conditions of the machine back then. Stored runs older than 14 days are removed.
 - **Concurrency**: one run at a time in the clone, under a lock in the git common directory; another run fails right away. Separate clones run independently.
 
 ```bash
@@ -90,6 +91,9 @@ just bench-compare
 
 # Compare with another revision, only the benchmarks matching a criterion filter
 just bench-compare v0.36.5 timestamp
+
+# Reuse the stored run of the base benchmarks, if it has the same key
+HL_BENCH_REUSE_BASE=1 just bench-compare
 ```
 
 Requires [uv](https://docs.astral.sh/uv/), which runs the script.
