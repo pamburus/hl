@@ -698,6 +698,16 @@ impl SegmentBuf {
         self.size = end;
     }
 
+    /// Returns a SegmentBuf holding the given data without copying it, in a buffer that does not belong to any pool.
+    #[inline]
+    pub fn from_vec(data: Vec<u8>) -> Self {
+        let size = data.len();
+        Self {
+            buf: Pooled::detached(data),
+            size,
+        }
+    }
+
     /// Transforms the SegmentBuf into inner Vec<u8> holding only the data.
     /// The buffer no longer returns to its pool.
     #[inline]
@@ -1061,16 +1071,17 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
 
     #[inline]
     fn complete(&mut self) -> Option<Result<Segment>> {
-        let buf = self
-            .fetched
-            .iter()
-            .flat_map(|(buf, ..)| buf.data())
-            .cloned()
-            .collect::<Vec<u8>>();
+        // One allocation of the exact size, filled part by part.
+        let total = self.fetched.iter().map(|(buf, ..)| buf.len()).sum();
+        let mut buf = Vec::with_capacity(total);
+        for (part, ..) in &self.fetched {
+            buf.extend_from_slice(part.data());
+        }
         // The parts return to their pool.
         self.fetched.clear();
 
-        Some(Ok(Segment::Complete(buf.into())))
+        // Moved in, not copied again as `buf.into()` would.
+        Some(Ok(Segment::Complete(SegmentBuf::from_vec(buf))))
     }
 }
 

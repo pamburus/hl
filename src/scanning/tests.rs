@@ -584,6 +584,33 @@ fn test_jumbo_reaches_limit_before_last_part() {
 }
 
 #[test]
+fn test_segment_buf_from_vec_keeps_the_allocation() {
+    let data = b"abcdefg\n".to_vec();
+    let ptr = data.as_ptr();
+    let buf = SegmentBuf::from_vec(data);
+    assert_eq!(buf.data(), b"abcdefg\n");
+    assert_eq!(buf.into_data().as_ptr(), ptr);
+}
+
+#[test]
+fn test_jumbo_joined_entry_is_sized_exactly() {
+    let sf = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sf.clone(), b'\n');
+    let mut data = Cursor::new(b"abcdefg\nx\n");
+    let tokens = scanner
+        .items(&mut data)
+        .with_max_segment_size(16)
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+    let Segment::Complete(joined) = &tokens[0] else {
+        panic!("expected a complete segment, got {:?}", tokens[0]);
+    };
+    assert_eq!(joined.data(), b"abcdefg\n");
+    assert_eq!(joined.capacity(), joined.len());
+    assert_eq!(tokens[1], Segment::Complete(b"x\n".into()));
+}
+
+#[test]
 fn test_substr_searcher_partial_match_l() {
     // Test multi-character delimiter partial matching from left
     let searcher = SubStrSearcher::new("abc".as_bytes());
