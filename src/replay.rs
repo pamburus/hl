@@ -630,11 +630,12 @@ impl<Key: Copy + Clone + Eq + PartialEq + Ord + PartialOrd + Hash> Cache for Lru
 
     fn cache<F: FnOnce() -> Result<Buf>>(&mut self, key: Key, f: F) -> Result<&[u8]> {
         let now = Instant::now();
-        if self.timestamps.len() == self.limit && !self.timestamps.contains_key(&key) {
-            if let Some((&(timestamp, i), &_)) = self.data.iter().next() {
-                self.timestamps.remove(&i);
-                self.data.remove(&(timestamp, i));
-            }
+        if self.timestamps.len() == self.limit
+            && !self.timestamps.contains_key(&key)
+            && let Some((&(timestamp, i), &_)) = self.data.iter().next()
+        {
+            self.timestamps.remove(&i);
+            self.data.remove(&(timestamp, i));
         }
 
         Ok(match self.timestamps.entry(key) {

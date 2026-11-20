@@ -188,10 +188,10 @@ fn build_capnp() -> Result<()> {
         if hash_file.is_file() {
             let file = File::open(&hash_file)
                 .map_err(|e| anyhow!("Failed to open hash file {}: {}", hash_file.display(), e))?;
-            if let Ok(stored_hashes) = json::from_reader::<_, HashInfo>(file) {
-                if hashes.is_current_against(&stored_hashes) {
-                    continue;
-                }
+            if let Ok(stored_hashes) = json::from_reader::<_, HashInfo>(file)
+                && hashes.is_current_against(&stored_hashes)
+            {
+                continue;
             }
         }
 
