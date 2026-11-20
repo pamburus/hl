@@ -770,14 +770,6 @@ impl<const N: usize> From<&[u8; N]> for SegmentBuf {
     }
 }
 
-impl From<&str> for SegmentBuf {
-    /// Returns a SegmentBuf holding a copy of the given text, in a buffer that does not belong to any pool.
-    #[inline]
-    fn from(data: &str) -> Self {
-        data.as_bytes().into()
-    }
-}
-
 // ---
 
 /// Segment is an output of Scanner.
