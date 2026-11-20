@@ -742,15 +742,31 @@ impl std::fmt::Debug for SegmentBuf {
     }
 }
 
-impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
-    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
+impl From<Vec<u8>> for SegmentBuf {
+    /// Returns a SegmentBuf holding the given data without copying it, in a buffer that does not belong to any pool.
     #[inline]
-    fn from(data: T) -> Self {
-        let size = data.as_ref().len();
+    fn from(data: Vec<u8>) -> Self {
+        let size = data.len();
         Self {
-            buf: Pooled::detached(data.as_ref().into()),
+            buf: Pooled::detached(data),
             size,
         }
+    }
+}
+
+impl From<&[u8]> for SegmentBuf {
+    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
+    #[inline]
+    fn from(data: &[u8]) -> Self {
+        data.to_vec().into()
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for SegmentBuf {
+    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
+    #[inline]
+    fn from(data: &[u8; N]) -> Self {
+        data.as_slice().into()
     }
 }
 
@@ -1061,16 +1077,17 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
 
     #[inline]
     fn complete(&mut self) -> Option<Result<Segment>> {
-        let buf = self
-            .fetched
-            .iter()
-            .flat_map(|(buf, ..)| buf.data())
-            .cloned()
-            .collect::<Vec<u8>>();
+        // One allocation of the exact size, filled part by part.
+        let total = self.fetched.iter().map(|(buf, ..)| buf.len()).sum();
+        let mut buf = Vec::with_capacity(total);
+        for (part, ..) in &self.fetched {
+            buf.extend_from_slice(part.data());
+        }
         // The parts return to their pool.
         self.fetched.clear();
 
-        Some(Ok(Segment::Complete(buf.into())))
+        // From<Vec<u8>> moves the joined Vec in, without another copy.
+        Some(Ok(Segment::Complete(SegmentBuf::from(buf))))
     }
 }
 
