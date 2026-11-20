@@ -1,5 +1,11 @@
 // std imports
 use std::path::PathBuf;
+#[cfg(not(target_os = "macos"))]
+use std::{
+    collections::VecDeque,
+    mem,
+    sync::{Condvar, Mutex},
+};
 
 // local imports
 use crate::error::Result;
@@ -11,7 +17,7 @@ pub type EventKind = notify::EventKind;
 
 // ---
 
-pub fn run<H>(mut paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+pub fn run<H>(mut paths: Vec<PathBuf>, handle: H) -> Result<()>
 where
     H: FnMut(Event) -> Result<()>,
 {
@@ -45,13 +51,80 @@ where
     watch.sort_unstable();
     watch.dedup();
 
-    imp::run(watch, |event| {
-        if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
-            handle(event)
-        } else {
-            Ok(())
+    imp::run(watch, Filter { paths }, handle)
+}
+
+// ---
+
+/// Tells which events are worth handling.
+struct Filter {
+    /// The files watched, sorted.
+    paths: Vec<PathBuf>,
+}
+
+impl Filter {
+    /// Returns whether `event` is about one of the files watched and can change what is read from it.
+    ///
+    /// A watched directory brings the events of all files in it, and every read of a file brings an access event.
+    fn accepts(&self, event: &Event) -> bool {
+        !event.kind.is_access() && event.paths.iter().any(|path| self.paths.binary_search(path).is_ok())
+    }
+}
+
+// ---
+
+/// Holds the events that come from the watcher until they are handled.
+///
+/// While the handler is busy, events can come much faster than it takes them, such as one for every write to a file,
+/// so only the events accepted by the [`Filter`] are kept, and an event that repeats the last one waiting is dropped,
+/// as handling one event reads all that was written before it.
+///
+/// Events repeat each other when they have the same paths and the same kind, whatever its detail, as different sources
+/// can report the same change in more detail or less, such as the watcher and the poller on Windows.
+#[cfg(not(target_os = "macos"))]
+struct Queue {
+    filter: Filter,
+    events: Mutex<VecDeque<notify::Result<Event>>>,
+    ready: Condvar,
+}
+
+#[cfg(not(target_os = "macos"))]
+impl Queue {
+    fn new(filter: Filter) -> Self {
+        Self {
+            filter,
+            events: Mutex::new(VecDeque::new()),
+            ready: Condvar::new(),
         }
-    })
+    }
+
+    /// Adds `event`, unless the filter does not accept it or it repeats the last event waiting.
+    fn push(&self, event: notify::Result<Event>) {
+        if let Ok(new) = &event {
+            if !self.filter.accepts(new) {
+                return;
+            }
+        }
+        let mut events = self.events.lock().unwrap();
+        if let (Ok(new), Some(Ok(last))) = (&event, events.back()) {
+            if mem::discriminant(&new.kind) == mem::discriminant(&last.kind) && new.paths == last.paths {
+                return;
+            }
+        }
+        events.push_back(event);
+        self.ready.notify_one();
+    }
+
+    /// Removes and returns the first event waiting, waiting for one to come if there is none.
+    fn pop(&self) -> notify::Result<Event> {
+        let mut events = self.events.lock().unwrap();
+        loop {
+            if let Some(event) = events.pop_front() {
+                return event;
+            }
+            events = self.ready.wait(events).unwrap();
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -61,33 +134,33 @@ use windows as imp;
 
 #[cfg(not(any(target_os = "macos", windows)))]
 mod imp {
-    use std::sync::mpsc::{self};
-    use std::time::Duration;
+    use std::{sync::Arc, time::Duration};
 
     use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 
     use super::*;
-    use crate::error::Error;
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, filter: Filter, mut handle: H) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
-        let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+        let queue = Arc::new(Queue::new(filter));
+        let mut watcher = RecommendedWatcher::new(
+            {
+                let queue = queue.clone();
+                move |event| queue.push(event)
+            },
+            Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL),
+        )?;
 
         for path in &paths {
             watcher.watch(path, RecursiveMode::NonRecursive)?;
         }
 
         loop {
-            match rx.recv() {
-                Ok(Ok(event)) => handle(event)?,
-                Ok(Err(err)) => return Err(err.into()),
-                Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
-            };
+            handle(queue.pop()?)?;
         }
     }
 }
@@ -101,7 +174,7 @@ mod imp {
 
     use super::*;
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, filter: Filter, mut handle: H) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -125,7 +198,10 @@ mod imp {
                 if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
                     added.insert(path);
                     if !synced {
-                        handle(Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone()))?;
+                        let event = Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone());
+                        if filter.accepts(&event) {
+                            handle(event)?;
+                        }
                     }
                 }
             }
@@ -180,7 +256,9 @@ mod imp {
                             #[allow(unreachable_patterns)]
                             _ => Event::new(EventKind::Other),
                         };
-                        handle(event)?;
+                        if filter.accepts(&event) {
+                            handle(event)?;
+                        }
                     }
                     _ => unreachable!(),
                 };
@@ -188,3 +266,6 @@ mod imp {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

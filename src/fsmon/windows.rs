@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::mpsc,
+    sync::{Arc, Weak},
     thread,
     time::{Duration, Instant},
 };
@@ -10,11 +10,8 @@ use notify::{
     event::{CreateKind, DataChange, ModifyKind, RemoveKind},
 };
 
-use super::{Event, EventKind};
-use crate::{
-    error::{Error, Result},
-    win_file_id,
-};
+use super::{Event, EventKind, Filter, Queue};
+use crate::{error::Result, win_file_id};
 
 // Windows NTFS defers directory index entry updates (size, mtime) until
 // CloseHandle or FlushFileBuffers.  ReadDirectoryChangesW monitors the
@@ -78,37 +75,37 @@ fn sleep_duration(avg_secs: impl Iterator<Item = f64>) -> Duration {
     Duration::from_secs_f64((min / 2.0).clamp(FLOOR_SECS, CEILING_SECS))
 }
 
-pub(super) fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+pub(super) fn run<H>(paths: Vec<PathBuf>, filter: Filter, mut handle: H) -> Result<()>
 where
     H: FnMut(Event) -> Result<()>,
 {
-    let (tx, rx) = mpsc::channel::<Event>();
+    let queue = Arc::new(Queue::new(filter));
 
-    // Thread 1: ReadDirectoryChangesW via notify.
+    // ReadDirectoryChangesW via notify.
     // Catches file rotation (rename/create/delete) immediately; write events
     // may also arrive whenever the NTFS lazy writer syncs the directory entry.
-    let (wtx, wrx) = mpsc::channel();
-    let mut watcher = RecommendedWatcher::new(wtx, Config::default())?;
+    // Errors are dropped, as the polling below still detects the changes.
+    let mut watcher = RecommendedWatcher::new(
+        {
+            let queue = queue.clone();
+            move |event: notify::Result<Event>| {
+                if event.is_ok() {
+                    queue.push(event);
+                }
+            }
+        },
+        Config::default(),
+    )?;
     for path in &paths {
         watcher.watch(path, RecursiveMode::NonRecursive)?;
     }
-    {
-        let tx = tx.clone();
-        thread::spawn(move || {
-            let _watcher = watcher;
-            while let Ok(Ok(event)) = wrx.recv() {
-                if tx.send(event).is_err() {
-                    break;
-                }
-            }
-        });
-    }
 
-    // Thread 2: adaptive GetFileInformationByHandle polling.
+    // Adaptive GetFileInformationByHandle polling in a thread of its own,
+    // which stops once the queue is gone.
     // Opens a fresh handle per tick to read the live MFT record, catching
     // writes to open files that ReadDirectoryChangesW would miss.
     {
-        let tx = tx.clone();
+        let queue = Arc::downgrade(&queue);
         let file_paths: Vec<PathBuf> = paths.into_iter().filter(|p| !p.is_dir()).collect();
         thread::spawn(move || {
             enum Seen {
@@ -130,8 +127,12 @@ where
                 })
                 .collect();
 
+            let send =
+                |queue: &Arc<Queue>, kind, path: &PathBuf| queue.push(Ok(Event::new(kind).add_path(path.clone())));
+
             loop {
                 thread::sleep(sleep_duration(states.iter().map(|s| s.estimator.avg_secs)));
+                let Some(queue) = Weak::upgrade(&queue) else { return };
                 for state in &mut states {
                     match win_file_id::open_shared(&state.path).and_then(|f| win_file_id::query(&f)) {
                         Some(info) => {
@@ -149,33 +150,15 @@ where
                             if changed {
                                 state.estimator.on_change();
                                 if rotated {
-                                    if tx
-                                        .send(
-                                            Event::new(EventKind::Remove(RemoveKind::File))
-                                                .add_path(state.path.clone()),
-                                        )
-                                        .is_err()
-                                    {
-                                        return;
-                                    }
-                                    if tx
-                                        .send(
-                                            Event::new(EventKind::Create(CreateKind::File))
-                                                .add_path(state.path.clone()),
-                                        )
-                                        .is_err()
-                                    {
-                                        return;
-                                    }
+                                    send(&queue, EventKind::Remove(RemoveKind::File), &state.path);
+                                    send(&queue, EventKind::Create(CreateKind::File), &state.path);
                                 } else {
                                     let kind = if appeared {
                                         EventKind::Create(CreateKind::File)
                                     } else {
                                         EventKind::Modify(ModifyKind::Data(DataChange::Size))
                                     };
-                                    if tx.send(Event::new(kind).add_path(state.path.clone())).is_err() {
-                                        return;
-                                    }
+                                    send(&queue, kind, &state.path);
                                 }
                             } else {
                                 state.estimator.on_no_change();
@@ -185,12 +168,7 @@ where
                             if matches!(state.seen, Seen::Present { .. }) {
                                 state.seen = Seen::Absent;
                                 state.estimator.on_change();
-                                if tx
-                                    .send(Event::new(EventKind::Remove(RemoveKind::File)).add_path(state.path.clone()))
-                                    .is_err()
-                                {
-                                    return;
-                                }
+                                send(&queue, EventKind::Remove(RemoveKind::File), &state.path);
                             } else {
                                 state.estimator.on_no_change();
                             }
@@ -201,12 +179,7 @@ where
         });
     }
 
-    drop(tx);
-
     loop {
-        match rx.recv() {
-            Ok(event) => handle(event)?,
-            Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
-        }
+        handle(queue.pop()?)?;
     }
 }
