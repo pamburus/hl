@@ -587,10 +587,19 @@ fn test_jumbo_reaches_limit_before_last_part() {
 fn test_segment_buf_from_vec_keeps_the_allocation() {
     let data = b"abcdefg\n".to_vec();
     let ptr = data.as_ptr();
-    let buf = SegmentBuf::from_vec(data);
+    let buf = SegmentBuf::from(data);
     assert_eq!(buf.data(), b"abcdefg\n");
     let data = buf.into_data();
     assert_eq!(data.as_ptr(), ptr);
+}
+
+#[test]
+fn test_segment_buf_from_slice_copies() {
+    let data = b"abcdefg\n".to_vec();
+    let buf = SegmentBuf::from(data.as_slice());
+    assert_eq!(buf.data(), b"abcdefg\n");
+    let copy = buf.into_data();
+    assert_ne!(copy.as_ptr(), data.as_ptr());
 }
 
 #[test]

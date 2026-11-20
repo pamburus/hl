@@ -698,16 +698,6 @@ impl SegmentBuf {
         self.size = end;
     }
 
-    /// Returns a SegmentBuf holding the given data without copying it, in a buffer that does not belong to any pool.
-    #[inline]
-    pub fn from_vec(data: Vec<u8>) -> Self {
-        let size = data.len();
-        Self {
-            buf: Pooled::detached(data),
-            size,
-        }
-    }
-
     /// Transforms the SegmentBuf into inner Vec<u8> holding only the data.
     /// The buffer no longer returns to its pool.
     #[inline]
@@ -752,15 +742,39 @@ impl std::fmt::Debug for SegmentBuf {
     }
 }
 
-impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
-    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
+impl From<Vec<u8>> for SegmentBuf {
+    /// Returns a SegmentBuf holding the given data without copying it, in a buffer that does not belong to any pool.
     #[inline]
-    fn from(data: T) -> Self {
-        let size = data.as_ref().len();
+    fn from(data: Vec<u8>) -> Self {
+        let size = data.len();
         Self {
-            buf: Pooled::detached(data.as_ref().into()),
+            buf: Pooled::detached(data),
             size,
         }
+    }
+}
+
+impl From<&[u8]> for SegmentBuf {
+    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
+    #[inline]
+    fn from(data: &[u8]) -> Self {
+        data.to_vec().into()
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for SegmentBuf {
+    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
+    #[inline]
+    fn from(data: &[u8; N]) -> Self {
+        data.as_slice().into()
+    }
+}
+
+impl From<&str> for SegmentBuf {
+    /// Returns a SegmentBuf holding a copy of the given text, in a buffer that does not belong to any pool.
+    #[inline]
+    fn from(data: &str) -> Self {
+        data.as_bytes().into()
     }
 }
 
@@ -1080,8 +1094,8 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
         // The parts return to their pool.
         self.fetched.clear();
 
-        // Moved in, not copied again as `buf.into()` would.
-        Some(Ok(Segment::Complete(SegmentBuf::from_vec(buf))))
+        // From<Vec<u8>> moves the joined Vec in, without another copy.
+        Some(Ok(Segment::Complete(SegmentBuf::from(buf))))
     }
 }
 
