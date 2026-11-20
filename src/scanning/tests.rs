@@ -589,7 +589,8 @@ fn test_segment_buf_from_vec_keeps_the_allocation() {
     let ptr = data.as_ptr();
     let buf = SegmentBuf::from_vec(data);
     assert_eq!(buf.data(), b"abcdefg\n");
-    assert_eq!(buf.into_data().as_ptr(), ptr);
+    let data = buf.into_data();
+    assert_eq!(data.as_ptr(), ptr);
 }
 
 #[test]
@@ -597,17 +598,20 @@ fn test_jumbo_joined_entry_is_sized_exactly() {
     let sf = Arc::new(SegmentBufFactory::new(3));
     let scanner = Scanner::new(sf.clone(), b'\n');
     let mut data = Cursor::new(b"abcdefg\nx\n");
-    let tokens = scanner
+    let mut tokens = scanner
         .items(&mut data)
         .with_max_segment_size(16)
         .collect::<Result<Vec<_>>>()
-        .unwrap();
-    let Segment::Complete(joined) = &tokens[0] else {
-        panic!("expected a complete segment, got {:?}", tokens[0]);
+        .unwrap()
+        .into_iter();
+    let joined = match tokens.next() {
+        Some(Segment::Complete(joined)) => joined.into_data(),
+        other => panic!("expected a complete segment, got {:?}", other),
     };
-    assert_eq!(joined.data(), b"abcdefg\n");
+    assert_eq!(joined, b"abcdefg\n");
+    // The Vec itself, not SegmentBuf::capacity (the buffer's length): allocated once at its exact size.
     assert_eq!(joined.capacity(), joined.len());
-    assert_eq!(tokens[1], Segment::Complete(b"x\n".into()));
+    assert_eq!(tokens.next(), Some(Segment::Complete(b"x\n".into())));
 }
 
 #[test]
