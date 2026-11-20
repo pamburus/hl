@@ -87,11 +87,11 @@ impl StylePack<Element, Style> {
             // V1: Merge parent into each explicitly-defined inner element
             // Both have base=empty at this point, but ModeSetDiff is preserved
             for (element, style) in self.clone() {
-                if let Some(outer) = element.outer() {
-                    if let Some(outer) = self.0.get(&outer) {
-                        // Merge parent and inner with ModeSetDiff semantics
-                        self.0.insert(element, outer.clone().merged(&style, flags));
-                    }
+                if let Some(outer) = element.outer()
+                    && let Some(outer) = self.0.get(&outer)
+                {
+                    // Merge parent and inner with ModeSetDiff semantics
+                    self.0.insert(element, outer.clone().merged(&style, flags));
                 }
             }
         }

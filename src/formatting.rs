@@ -1006,11 +1006,11 @@ impl<'a> FieldFormatter<'a> {
         self.end(fs, ffv);
 
         // If object had no visible content, rollback buffer and state
-        if let Some(pos) = rollback_pos {
-            if result == ValueFormatResult::Empty {
-                s.batch(|buf| buf.truncate(pos));
-                return FieldFormatResult::HiddenByPredefined;
-            }
+        if let Some(pos) = rollback_pos
+            && result == ValueFormatResult::Empty
+        {
+            s.batch(|buf| buf.truncate(pos));
+            return FieldFormatResult::HiddenByPredefined;
         }
 
         match result {

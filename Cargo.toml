@@ -2,7 +2,7 @@
 name = "hl"
 version.workspace = true
 edition.workspace = true
-rust-version = "1.86.0"
+rust-version = "1.88.0"
 description = "JSON and logfmt log converter to human readable representation"
 repository.workspace = true
 license.workspace = true
@@ -148,7 +148,7 @@ wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
 
 [workspace.package]
-version = "0.37.0-alpha.27"
+version = "0.37.0-alpha.28"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"

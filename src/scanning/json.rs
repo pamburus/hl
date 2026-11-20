@@ -66,20 +66,20 @@ impl Search for JsonDelimitSearcher {
 
     #[inline]
     fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
-        if let Some(i) = memrchr(b'}', buf) {
-            if whitespace_only(&buf[i + 1..]) {
-                return Some(i + 1);
-            }
+        if let Some(i) = memrchr(b'}', buf)
+            && whitespace_only(&buf[i + 1..])
+        {
+            return Some(i + 1);
         }
         None
     }
 
     #[inline]
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
-        if let Some(i) = memchr(b'{', buf) {
-            if whitespace_only(&buf[..i]) {
-                return Some(i);
-            }
+        if let Some(i) = memchr(b'{', buf)
+            && whitespace_only(&buf[..i])
+        {
+            return Some(i);
         }
         None
     }
@@ -153,18 +153,18 @@ fn resolve_delimiter(buf: &[u8], i: usize, edge: bool) -> Option<Range<usize>> {
     match c {
         b'}' => {
             let i = i + 1;
-            if i < buf.len() {
-                if let Some(j) = find_right_boundary_end(&buf[i..], edge) {
-                    let j = i + j;
-                    return Some(i..j);
-                }
+            if i < buf.len()
+                && let Some(j) = find_right_boundary_end(&buf[i..], edge)
+            {
+                let j = i + j;
+                return Some(i..j);
             }
         }
         b'{' => {
-            if i != 0 {
-                if let Some(j) = find_left_boundary_begin(&buf[..i], edge) {
-                    return Some(j..i);
-                }
+            if i != 0
+                && let Some(j) = find_left_boundary_begin(&buf[..i], edge)
+            {
+                return Some(j..i);
             }
         }
         _ => unreachable!(),
