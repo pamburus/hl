@@ -60,7 +60,15 @@ def home():
     bare clone has none, and with --separate-git-dir nothing in the git directory names it.
     """
     common = common_dir()
-    worktree = run("config", "--file", str(common / "config"), "core.worktree").stdout.strip()
+
+    def config(file, key, *opts):
+        return run("config", "--file", str(common / file), *opts, key).stdout.strip()
+
+    worktree = ""
+    # With per-worktree configuration, the main worktree keeps core.worktree in a file of its own.
+    if config("config", "extensions.worktreeConfig", "--type=bool") == "true":
+        worktree = config("config.worktree", "core.worktree")
+    worktree = worktree or config("config", "core.worktree")
     if worktree:
         return (common / worktree).resolve()
     if common.name == ".git":
