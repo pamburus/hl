@@ -474,20 +474,20 @@ impl App {
                             return None;
                         }
                         if let Some((ts_min, ts_max)) = src.stat.ts_min_max {
-                            if let Some(until) = self.options.filter.basic.until {
-                                if ts_min > until.into() {
-                                    return None;
-                                }
+                            if let Some(until) = self.options.filter.basic.until
+                                && ts_min > until.into()
+                            {
+                                return None;
                             }
-                            if let Some(since) = self.options.filter.basic.since {
-                                if ts_max < since.into() {
-                                    return None;
-                                }
+                            if let Some(since) = self.options.filter.basic.since
+                                && ts_max < since.into()
+                            {
+                                return None;
                             }
-                            if let Some(level) = self.options.filter.basic.level {
-                                if !src.match_level(level) {
-                                    return None;
-                                }
+                            if let Some(level) = self.options.filter.basic.level
+                                && !src.match_level(level)
+                            {
+                                return None;
                             }
                             let offset = block.offset();
                             Some((block, ts_min, ts_max, i, offset))

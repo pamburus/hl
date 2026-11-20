@@ -472,6 +472,26 @@ fn test_input_tail_partial_match_handling() {
 }
 
 #[test]
+fn test_input_tail_with_crlf_across_read_boundary() {
+    // The tail is read backwards in 64 KiB parts. The last part starts with the line feed of a
+    // CRLF whose carriage return ends the part before it, which has no other line break.
+    let mut data = b"line1\nline2\n".to_vec();
+    data.extend(std::iter::repeat_n(b'x', 64 * 1024));
+    data.extend(b"\r\n");
+    data.extend(std::iter::repeat_n(b'y', 64 * 1024 - 3));
+    data.extend(b"\r\n");
+
+    let stream = Stream::RandomAccess(Box::new(Cursor::new(data.clone())));
+    let input = Input::new(InputReference::Stdin, stream);
+
+    let input = input.tail(2, Delimiter::Newline).unwrap();
+    let mut buf = Vec::new();
+    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
+
+    assert_eq!(buf, data[12..]);
+}
+
+#[test]
 fn test_input_tail_json_partial_match() {
     let mut data = Vec::new();
     for i in 0..100 {
