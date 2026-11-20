@@ -236,26 +236,27 @@ jobs:
           fi
           scripts/perf-gate.py --base HEAD^1 --hl target/release/hl --markdown perf-gate.md "${args[@]}"
 
-      # Also when the check fails. Pull requests from forks get a read-only token, they have the job summary only.
+      # Also when the check fails. The token of pull requests from forks cannot comment, so the comment is posted by the
+      # perf-gate-report workflow from the uploaded report.
       - name: Report instruction counts
         if: ${{ !cancelled() && github.event_name == 'pull_request' && hashFiles('perf-gate.md') != '' }}
         env:
-          GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
         run: |
           cat perf-gate.md >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$FORK" == true ]]; then
-            exit 0
-          fi
-          # One comment per pull request, updated on each run.
-          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
-            -q '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- perf-gate -->"))) | .id' | head -n 1)
-          if [[ -n "$id" ]]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@perf-gate.md > /dev/null
-          else
-            gh pr comment "$PR" --body-file perf-gate.md
-          fi
+          mkdir perf-gate-report
+          cp perf-gate.md perf-gate-report/
+          echo "$PR" > perf-gate-report/pr
+
+      - name: Upload instruction count report
+        if: ${{ !cancelled() && hashFiles('perf-gate-report/pr') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-gate-report
+          path: perf-gate-report
+          retention-days: 1
+          # Replaces the report of an earlier attempt when the job is re-run.
+          overwrite: true
 
   coverage:
     runs-on: ubuntu-latest
