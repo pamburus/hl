@@ -584,6 +584,46 @@ fn test_jumbo_reaches_limit_before_last_part() {
 }
 
 #[test]
+fn test_segment_buf_from_vec_keeps_the_allocation() {
+    let data = b"abcdefg\n".to_vec();
+    let ptr = data.as_ptr();
+    let buf = SegmentBuf::from(data);
+    assert_eq!(buf.data(), b"abcdefg\n");
+    let data = buf.into_data();
+    assert_eq!(data.as_ptr(), ptr);
+}
+
+#[test]
+fn test_segment_buf_from_slice_copies() {
+    let data = b"abcdefg\n".to_vec();
+    let buf = SegmentBuf::from(data.as_slice());
+    assert_eq!(buf.data(), b"abcdefg\n");
+    let copy = buf.into_data();
+    assert_ne!(copy.as_ptr(), data.as_ptr());
+}
+
+#[test]
+fn test_jumbo_joined_entry_is_sized_exactly() {
+    let sf = Arc::new(SegmentBufFactory::new(3));
+    let scanner = Scanner::new(sf.clone(), b'\n');
+    let mut data = Cursor::new(b"abcdefg\nx\n");
+    let mut tokens = scanner
+        .items(&mut data)
+        .with_max_segment_size(16)
+        .collect::<Result<Vec<_>>>()
+        .unwrap()
+        .into_iter();
+    let joined = match tokens.next() {
+        Some(Segment::Complete(joined)) => joined.into_data(),
+        other => panic!("expected a complete segment, got {:?}", other),
+    };
+    assert_eq!(joined, b"abcdefg\n");
+    // The Vec itself, not SegmentBuf::capacity (the buffer's length): allocated once at its exact size.
+    assert_eq!(joined.capacity(), joined.len());
+    assert_eq!(tokens.next(), Some(Segment::Complete(b"x\n".into())));
+}
+
+#[test]
 fn test_substr_searcher_partial_match_l() {
     // Test multi-character delimiter partial matching from left
     let searcher = SubStrSearcher::new("abc".as_bytes());
