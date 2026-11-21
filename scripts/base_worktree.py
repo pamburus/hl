@@ -1,10 +1,11 @@
 """Worktrees and builds of base revisions, for the scripts that compare a build of the working tree with one of a base.
 
-Each base revision has one worktree, `.worktrees/base-<sha>` in the main worktree of the clone, created on first use and
-never moved to another commit. Every script and every worktree of the clone that compares with that commit shares it.
-Worktrees unused for 14 days are removed.
+Each base revision has one worktree, `.worktrees/base-<sha>` in the main worktree of the clone, or in the git common
+directory where no worktree can find the main one, as in a bare clone. It is created on first use and never moved to
+another commit. Every script and every worktree of the clone that compares with that commit shares it. Worktrees unused
+for 14 days are removed.
 
-The base worktrees take turns in one target directory, `target/base` in the main worktree, so that dependencies are
+The base worktrees take turns in one target directory, `target/base` in the same directory, so that dependencies are
 built once, not once per base. It stays separate from the target directories of the heads, because cargo gives a
 workspace crate the same identity wherever its source is: a head build would take the crates built for a base.
 
@@ -52,8 +53,31 @@ def common_dir():
     return Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
 
 
+def home():
+    """Returns the main worktree of the clone, or the git common directory if the worktrees cannot find it.
+
+    The main worktree is not always the parent of the git common directory. A submodule names it in core.worktree. A
+    bare clone has none, and with --separate-git-dir nothing in the git directory names it.
+    """
+    common = common_dir()
+
+    def config(file, key, *opts):
+        return run("config", "--file", str(common / file), *opts, key).stdout.strip()
+
+    worktree = ""
+    # With per-worktree configuration, the main worktree keeps core.worktree in a file of its own.
+    if config("config", "extensions.worktreeConfig", "--type=bool") == "true":
+        worktree = config("config.worktree", "core.worktree")
+    worktree = worktree or config("config", "core.worktree")
+    if worktree:
+        return (common / worktree).resolve()
+    if common.name == ".git":
+        return common.parent
+    return common
+
+
 def target_dir():
-    return common_dir().parent / "target" / "base"
+    return home() / "target" / "base"
 
 
 @contextmanager
@@ -94,7 +118,7 @@ def expire(registered, keep):
 def checkout(sha):
     """Returns the worktree of the commit sha, with any local changes in it discarded."""
     common = common_dir()
-    path = common.parent / ".worktrees" / f"{PREFIX}{sha[:12]}"
+    path = home() / ".worktrees" / f"{PREFIX}{sha[:12]}"
     with locked(common / LOCK):
         git("worktree", "prune")
         registered = worktrees()

@@ -190,7 +190,7 @@ def build_base(src, sha, git_dir=None):
         keep, target, lock = target_dir() / "perf-gate", target_dir() / "base", target_dir() / "base.lock"
         target_dir().mkdir(parents=True, exist_ok=True)
     else:
-        keep, target, lock = base_worktree.common_dir().parent / "target" / "perf-gate", None, None
+        keep, target, lock = base_worktree.home() / "target" / "perf-gate", None, None
     hl = keep / f"hl-{sha}"
     if hl.exists():
         return hl
