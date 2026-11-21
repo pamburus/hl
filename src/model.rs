@@ -1316,21 +1316,22 @@ impl<'a> KeyMatcher<'a> {
             [b'[', b']', b'.', ..] => return Some((IndexMatcher::Any, Some(KeyMatcher::new(&self.key[3..])))),
             [b'[', ..] => {
                 let tail = &bytes[1..];
-                if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit()) {
-                    if pos != 0 && tail[pos] == b']' && (pos >= tail.len() - 1 || tail[pos + 1] == b'.') {
-                        if let Ok(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse() {
-                            let idx = IndexMatcher::Exact(idx);
-                            if pos >= tail.len() - 1 {
-                                return Some((idx, None));
-                            } else {
-                                return Some((
-                                    idx,
-                                    Some(KeyMatcher::new(unsafe {
-                                        std::str::from_utf8_unchecked(&tail[pos + 2..])
-                                    })),
-                                ));
-                            }
-                        }
+                if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit())
+                    && pos != 0
+                    && tail[pos] == b']'
+                    && (pos >= tail.len() - 1 || tail[pos + 1] == b'.')
+                    && let Ok(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse()
+                {
+                    let idx = IndexMatcher::Exact(idx);
+                    if pos >= tail.len() - 1 {
+                        return Some((idx, None));
+                    } else {
+                        return Some((
+                            idx,
+                            Some(KeyMatcher::new(unsafe {
+                                std::str::from_utf8_unchecked(&tail[pos + 2..])
+                            })),
+                        ));
                     }
                 }
             }
@@ -1785,18 +1786,18 @@ impl Filter {
 
 impl RecordFilter for Filter {
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
-        if self.since.is_some() || self.until.is_some() {
-            if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
-                if let Some(since) = self.since {
-                    if ts < since {
-                        return false;
-                    }
-                }
-                if let Some(until) = self.until {
-                    if ts > until {
-                        return false;
-                    }
-                }
+        if (self.since.is_some() || self.until.is_some())
+            && let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse())
+        {
+            if let Some(since) = self.since
+                && ts < since
+            {
+                return false;
+            }
+            if let Some(until) = self.until
+                && ts > until
+            {
+                return false;
             }
         }
 

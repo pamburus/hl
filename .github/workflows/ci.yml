@@ -111,6 +111,37 @@ jobs:
       - name: Run executable
         run: cargo run --locked
 
+  # Checks that the workspace builds with the minimum Rust version declared in Cargo.toml. The other jobs use the
+  # toolchain from rust-toolchain.toml, which is newer.
+  msrv:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    env:
+      # Warnings are checked with the main toolchain, older ones may report different ones.
+      RUSTFLAGS: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read minimum Rust version
+        id: msrv
+        run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+      - name: Install minimum Rust version
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Run Check
+        run: cargo +${{ steps.msrv.outputs.version }} check --locked --workspace --all-targets --all-features
+
   stress-test:
     runs-on: ubuntu-latest
 

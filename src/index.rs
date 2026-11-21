@@ -574,11 +574,11 @@ where
                             jumps: jumps.len().try_into().unwrap(),
                         });
                     }
-                    if let Some(prev) = prev {
-                        if line.1 != prev + 1 {
-                            mask |= 1 << i;
-                            jumps.push(line.2);
-                        }
+                    if let Some(prev) = prev
+                        && line.1 != prev + 1
+                    {
+                        mask |= 1 << i;
+                        jumps.push(line.2);
                     }
                     prev = Some(line.1);
                 }

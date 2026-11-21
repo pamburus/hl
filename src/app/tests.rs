@@ -9,7 +9,7 @@ use std::{
 };
 
 // third-party imports
-use chrono::{Offset, Utc};
+use chrono::{Offset, TimeZone, Utc};
 use chrono_tz::UTC;
 use maplit::hashmap;
 use rstest::rstest;
@@ -510,6 +510,46 @@ fn test_sort_with_blank_lines() {
             "2024-01-25 18:10:20.435 |DBG| m2\n",
         ),
     );
+}
+
+#[rstest]
+#[case::until_before_block(None, None, Some((18, 9, 0)), "")]
+#[case::since_after_block(None, Some((18, 11, 0)), None, "")]
+#[case::level_above_block(Some(Level::Error), None, None, "")]
+#[case::block_kept(
+    Some(Level::Debug),
+    Some((18, 9, 0)),
+    Some((18, 11, 0)),
+    "2024-01-25 18:09:16.860 |DBG| m1\n2024-01-25 18:10:20.435 |DBG| m2\n"
+)]
+fn test_sort_with_filter_skipping_blocks(
+    #[case] level: Option<Level>,
+    #[case] since: Option<(u32, u32, u32)>,
+    #[case] until: Option<(u32, u32, u32)>,
+    #[case] expected: &str,
+) {
+    let input = input(concat!(
+        r#"{"level":"debug","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m2"}"#,
+        "\n",
+        r#"{"level":"debug","ts":"2024-01-25T19:09:16.860711+01:00","msg":"m1"}"#,
+        "\n",
+    ));
+    let time = |(h, m, s)| Utc.with_ymd_and_hms(2024, 1, 25, h, m, s).unwrap();
+
+    let mut output = Vec::new();
+    let app = App::new(
+        options().with_sort(true).with_filter(
+            Filter {
+                level,
+                since: since.map(time),
+                until: until.map(time),
+                ..Default::default()
+            }
+            .into(),
+        ),
+    );
+    app.run(vec![input], &mut output).unwrap();
+    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
 }
 
 #[test]
