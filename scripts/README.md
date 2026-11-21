@@ -53,7 +53,7 @@ Compares the number of instructions two builds of `hl` execute on the same input
 
 Following a file is left out, because how much `hl` reads per wakeup depends on timing.
 
-In pull requests, the `perf-gate` job of the CI workflow runs it on the release build of the stress-test job, against the tip of the base branch, and shows the counts in the job summary and in a comment on the pull request, updated on each run. Pull requests from forks get the job summary only, because their token cannot comment. The release build of each push to a release line is cached for the pull requests based on it, so usually nothing else is built. For a change that adds cost on purpose, add the `perf-regression-accepted` label and re-run the job: it then reports the counts without failing.
+In pull requests, the `perf-gate` job of the CI workflow runs it on the release build of the stress-test job, against the tip of the base branch, and shows the counts in the job summary. It also uploads them as an artifact, which the `perf-gate-report` workflow posts as a comment on the pull request, updated on each run, because the token of pull requests from forks cannot comment. The release build of each push to a release line is cached for the pull requests based on it, so usually nothing else is built. For a change that adds cost on purpose, add the `perf-regression-accepted` label and re-run the job: it then reports the counts without failing.
 
 ### Comparing builds
 
