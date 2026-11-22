@@ -43,8 +43,9 @@ build-release: (setup "build")
     cargo build --release
 
 [doc('Run the application, example: `just run --help`')]
+[positional-arguments]
 run *args: build
-    cargo run -- {{ args }}
+    cargo run -- "$@"
 
 [doc('Run tests for all packages in the workspace, example: `just test test-name -- --nocapture`')]
 [positional-arguments]
@@ -98,7 +99,8 @@ fmt-rust: (setup "build-nightly")
     cargo +nightly fmt --all
 
 [doc('Format Nix files')]
-fmt-nix: (run-nixfmt nix-files)
+fmt-nix:
+    @just run-nixfmt {{ nix-files }}
 
 [doc('Format TOML files')]
 fmt-toml: (setup "schema")
@@ -136,8 +138,9 @@ uncovered base="origin/develop": (setup "coverage")
     @scripts/coverage-diff-analysis.py -q --ide-links {{ base }}
 
 [doc('Run benchmarks')]
+[positional-arguments]
 bench *args: (setup "build")
-    cargo bench --workspace --locked {{ args }}
+    cargo bench --workspace --locked "$@"
 
 [doc('Compare benchmarks of the working tree with where it forked from {{base}}, without reference benchmarks, example: `just bench-compare origin/develop timestamp`')]
 [positional-arguments]
@@ -145,12 +148,14 @@ bench-compare base="origin/develop" *args: (setup "build")
     @base="$1"; shift; scripts/bench-compare.py --base "$base" -- "$@"
 
 [doc('Run stress tests on a release build, `profile` is `quick` or `full`, example: `just stress-test full --case long-line`')]
+[positional-arguments]
 stress-test profile="quick" *args: build-release
-    @scripts/stress-test.py --hl "${CARGO_TARGET_DIR:-target}/release/hl" --profile {{ profile }} {{ args }}
+    @profile="$1"; shift; scripts/stress-test.py --hl "${CARGO_TARGET_DIR:-target}/release/hl" --profile "$profile" "$@"
 
 [doc('Compare instruction counts of the working tree with where it forked from {{base}}, in Docker on macOS, example: `just perf-gate origin/develop --mode sort`')]
+[positional-arguments]
 perf-gate base="origin/develop" *args:
-    @scripts/perf-gate.py --base {{ base }} {{ args }}
+    @base="$1"; shift; scripts/perf-gate.py --base "$base" "$@"
 
 [doc('Check schema validation')]
 check-schema: (setup "schema")
@@ -239,12 +244,14 @@ nix-deps:
     fi
 
 [doc('Show `hl --help`')]
+[positional-arguments]
 usage *args: build
-    @./target/debug/hl --config - --help {{ args }}
+    @./target/debug/hl --config - --help "$@"
 
 [doc('Show `hl --help=long`')]
+[positional-arguments]
 usage-long *args: build
-    @./target/debug/hl --config - --help=long {{ args }}
+    @./target/debug/hl --config - --help=long "$@"
 
 [doc('Convert all Mermaid (.mmd) files to SVG')]
 mmd2svg:
@@ -290,24 +297,30 @@ mmd2svg:
     echo "✓ All Mermaid files converted to SVG"
 
 # Helper function to run a command locally or in Docker if not installed
+[positional-arguments]
 [private]
 nix-run-local-or-docker docker cmd *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    if command -v {{ cmd }} >/dev/null 2>&1; then
-        {{ cmd }} {{ args }}
+    cmd="$2"; shift 2
+    if command -v "$cmd" >/dev/null 2>&1; then
+        "$cmd" "$@"
     else
         just build-nix-docker-image
-        {{ docker }} {{ cmd }} {{ args }}
+        {{ docker }} "$cmd" "$@"
     fi
 
 # Helper function to run nix commands locally or in Docker
+[positional-arguments]
 [private]
-run-nix *args: (nix-run-local-or-docker nix-docker "nix" args)
+run-nix *args:
+    @just nix-run-local-or-docker {{ quote(nix-docker) }} nix "$@"
 
 # Helper function to run nixfmt commands locally or in Docker
+[positional-arguments]
 [private]
-run-nixfmt *args: (nix-run-local-or-docker nix-docker "nixfmt" args)
+run-nixfmt *args:
+    @just nix-run-local-or-docker {{ quote(nix-docker) }} nixfmt "$@"
 
 # Helper function to build NixOS docker image
 [private]
@@ -315,9 +328,10 @@ build-nix-docker-image:
     docker build -t {{ nix-docker-image }} build/docker/nix
 
 # Helper recipe to ensure required tools are available for a given task
+[positional-arguments]
 [private]
 setup *tools:
-    @contrib/bin/setup.sh {{ tools }}
+    @contrib/bin/setup.sh "$@"
 
 # Helper to evaluate repository state hash needed for version build metadata
 [private]
