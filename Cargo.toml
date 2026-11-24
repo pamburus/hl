@@ -131,6 +131,7 @@ strsim = "0.11"
 strum = { version = "0.28", features = ["derive"] }
 styled-help = { path = "./crates/styled-help" }
 syn = { version = "3", features = ["extra-traits", "full"] }
+tempfile = "3"
 terminal_size = "0.4"
 thiserror = "2"
 titlecase = "3"
@@ -148,7 +149,7 @@ wyhash = "0.6"
 yaml = { package = "yaml-peg", version = "1" }
 
 [workspace.package]
-version = "0.37.0-alpha.28"
+version = "0.37.0-alpha.29"
 edition = "2024"
 repository = "https://github.com/pamburus/hl"
 license = "MIT"
@@ -252,6 +253,7 @@ rand.workspace = true
 regex.workspace = true
 rstest.workspace = true
 stats_alloc.workspace = true
+tempfile.workspace = true
 wildmatch.workspace = true
 
 [build-dependencies]
