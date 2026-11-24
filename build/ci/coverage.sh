@@ -13,6 +13,9 @@ LLVM_BIN=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p'
 
 LLVM_PROFILE_PATTERN="target/coverage/test-*.profraw"
 PROFDATA_FILE="target/coverage.profdata"
+# The repository root, with the characters that have a special meaning in a regular expression escaped.
+ROOT_REGEX=$(printf '%s' "$PWD" | sed -e 's/\\/\\\\/g' -e 's/[].*^$+?(){}|[]/\\&/g')
+
 IGNORE=(
     '/.cargo/'
     '/.rustup/'
@@ -20,6 +23,7 @@ IGNORE=(
     'rustc/.*/library/'
     '_capnp\.rs$'
     '/tests\.rs$'
+    "^${ROOT_REGEX}/tests/"
     '/crates/styled-help/src/'
 )
 
@@ -131,8 +135,10 @@ function test_signals() {
 }
 
 function test() {
+    # Also builds the executable run by the integration tests and below.
+    # A separate `cargo build` would replace it with a build without the features enabled by dev-dependencies,
+    # which the coverage data of the integration tests does not match.
     cargo test --tests --workspace
-    cargo build
     ${MAIN_EXECUTABLE:?} --config - > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=short --color never > /dev/null
