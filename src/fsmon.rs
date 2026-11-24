@@ -6,14 +6,45 @@ use crate::error::Result;
 
 // ---
 
-pub type Event = notify::Event;
-pub type EventKind = notify::EventKind;
+/// A change of a watched file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change {
+    /// The file was created, written to, renamed or changed otherwise, so it can have new content
+    /// or be another file than before.
+    Modified,
+    /// The file was removed.
+    Removed,
+}
+
+#[cfg(not(target_os = "macos"))]
+impl Change {
+    /// Returns the change reported by a notify event of `kind`, or `None` for an access event.
+    ///
+    /// Access events are dropped, including the one reporting that a file opened for writing was closed:
+    /// the writes themselves are reported as modifications.
+    /// An event of unknown kind is taken as a modification, so the file is checked.
+    fn from_kind(kind: &notify::EventKind) -> Option<Self> {
+        use notify::EventKind;
+
+        match kind {
+            EventKind::Access(_) => None,
+            EventKind::Remove(_) => Some(Self::Removed),
+            EventKind::Create(_) | EventKind::Modify(_) | EventKind::Any | EventKind::Other => Some(Self::Modified),
+        }
+    }
+}
+
+/// Returns whether one of the `changed` paths is one of `paths`, sorted.
+fn concerns(changed: &[PathBuf], paths: &[PathBuf]) -> bool {
+    changed.iter().any(|path| paths.binary_search(path).is_ok())
+}
 
 // ---
 
+/// Watches `paths` and calls `handle` for each change of one of the files, until it fails.
 pub fn run<H>(mut paths: Vec<PathBuf>, mut handle: H) -> Result<()>
 where
-    H: FnMut(Event) -> Result<()>,
+    H: FnMut(Change) -> Result<()>,
 {
     if paths.is_empty() {
         return Ok(());
@@ -45,9 +76,9 @@ where
     watch.sort_unstable();
     watch.dedup();
 
-    imp::run(watch, |event| {
-        if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
-            handle(event)
+    imp::run(watch, |change, changed| {
+        if concerns(changed, &paths) {
+            handle(change)
         } else {
             Ok(())
         }
@@ -73,7 +104,7 @@ mod imp {
 
     pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
     where
-        H: FnMut(Event) -> Result<()>,
+        H: FnMut(Change, &[PathBuf]) -> Result<()>,
     {
         let (tx, rx) = mpsc::channel();
         let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
@@ -84,7 +115,11 @@ mod imp {
 
         loop {
             match rx.recv() {
-                Ok(Ok(event)) => handle(event)?,
+                Ok(Ok(event)) => {
+                    if let Some(change) = Change::from_kind(&event.kind) {
+                        handle(change, &event.paths)?;
+                    }
+                }
                 Ok(Err(err)) => return Err(err.into()),
                 Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
             };
@@ -97,13 +132,12 @@ mod imp {
     use std::{collections::HashSet, time::Duration};
 
     use kqueue::{EventData, EventFilter, FilterFlag, Ident, Vnode, Watcher};
-    use notify::event::{CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode};
 
     use super::*;
 
     pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
     where
-        H: FnMut(Event) -> Result<()>,
+        H: FnMut(Change, &[PathBuf]) -> Result<()>,
     {
         let mut watcher = Watcher::new()?;
         let mut added = HashSet::<&PathBuf>::new();
@@ -125,7 +159,7 @@ mod imp {
                 if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
                     added.insert(path);
                     if !synced {
-                        handle(Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone()))?;
+                        handle(Change::Modified, std::slice::from_ref(path))?;
                     }
                 }
             }
@@ -146,23 +180,20 @@ mod imp {
                         ident: Ident::Filename(_, path),
                     } => {
                         let path = PathBuf::from(path);
-                        let event = match data {
+                        let change = match data {
                             Vnode::Delete | Vnode::Revoke => {
                                 if added.contains(&path) {
                                     watcher.remove_filename(&path, EventFilter::EVFILT_VNODE)?;
                                     added.remove(&path);
                                     synced = false;
                                 }
-                                Event::new(EventKind::Remove(RemoveKind::Any)).add_path(path)
+                                Change::Removed
                             }
                             Vnode::Write => {
                                 if added.len() < paths.len() && path.is_dir() {
                                     synced = false;
                                 }
-                                Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Any))).add_path(path)
-                            }
-                            Vnode::Extend | Vnode::Truncate => {
-                                Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Size))).add_path(path)
+                                Change::Modified
                             }
                             Vnode::Rename => {
                                 if added.contains(&path) {
@@ -170,17 +201,12 @@ mod imp {
                                     added.remove(&path);
                                     synced = false;
                                 }
-                                Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any))).add_path(path)
+                                Change::Modified
                             }
-                            Vnode::Link => Event::new(EventKind::Create(CreateKind::Any)).add_path(path),
-                            Vnode::Attrib => {
-                                Event::new(EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any))).add_path(path)
-                            }
-
-                            #[allow(unreachable_patterns)]
-                            _ => Event::new(EventKind::Other),
+                            // Extended, truncated, linked or attributes changed.
+                            _ => Change::Modified,
                         };
-                        handle(event)?;
+                        handle(change, std::slice::from_ref(&path))?;
                     }
                     _ => unreachable!(),
                 };
@@ -188,3 +214,6 @@ mod imp {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

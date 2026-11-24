@@ -5,12 +5,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use notify::{
-    Config, RecommendedWatcher, RecursiveMode, Watcher,
-    event::{CreateKind, DataChange, ModifyKind, RemoveKind},
-};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 
-use super::{Event, EventKind};
+use super::Change;
 use crate::{
     error::{Error, Result},
     win_file_id,
@@ -80,9 +77,9 @@ fn sleep_duration(avg_secs: impl Iterator<Item = f64>) -> Duration {
 
 pub(super) fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
 where
-    H: FnMut(Event) -> Result<()>,
+    H: FnMut(Change, &[PathBuf]) -> Result<()>,
 {
-    let (tx, rx) = mpsc::channel::<Event>();
+    let (tx, rx) = mpsc::channel::<(Change, Vec<PathBuf>)>();
 
     // Thread 1: ReadDirectoryChangesW via notify.
     // Catches file rotation (rename/create/delete) immediately; write events
@@ -97,7 +94,10 @@ where
         thread::spawn(move || {
             let _watcher = watcher;
             while let Ok(Ok(event)) = wrx.recv() {
-                if tx.send(event).is_err() {
+                let notify::Event { kind, paths, .. } = event;
+                if let Some(change) = Change::from_kind(&kind)
+                    && tx.send((change, paths)).is_err()
+                {
                     break;
                 }
             }
@@ -136,7 +136,6 @@ where
                     match win_file_id::open_shared(&state.path).and_then(|f| win_file_id::query(&f)) {
                         Some(info) => {
                             let rotated = matches!(&state.seen, Seen::Present { id, .. } if *id != info.id);
-                            let appeared = matches!(&state.seen, Seen::Absent);
                             let changed = match &state.seen {
                                 Seen::Never => false,
                                 Seen::Absent => true,
@@ -148,34 +147,12 @@ where
                             };
                             if changed {
                                 state.estimator.on_change();
-                                if rotated {
-                                    if tx
-                                        .send(
-                                            Event::new(EventKind::Remove(RemoveKind::File))
-                                                .add_path(state.path.clone()),
-                                        )
-                                        .is_err()
-                                    {
-                                        return;
-                                    }
-                                    if tx
-                                        .send(
-                                            Event::new(EventKind::Create(CreateKind::File))
-                                                .add_path(state.path.clone()),
-                                        )
-                                        .is_err()
-                                    {
-                                        return;
-                                    }
-                                } else {
-                                    let kind = if appeared {
-                                        EventKind::Create(CreateKind::File)
-                                    } else {
-                                        EventKind::Modify(ModifyKind::Data(DataChange::Size))
-                                    };
-                                    if tx.send(Event::new(kind).add_path(state.path.clone())).is_err() {
-                                        return;
-                                    }
+                                // A replaced file is reported as removed first, so the old one is closed.
+                                if rotated && tx.send((Change::Removed, vec![state.path.clone()])).is_err() {
+                                    return;
+                                }
+                                if tx.send((Change::Modified, vec![state.path.clone()])).is_err() {
+                                    return;
                                 }
                             } else {
                                 state.estimator.on_no_change();
@@ -185,10 +162,7 @@ where
                             if matches!(state.seen, Seen::Present { .. }) {
                                 state.seen = Seen::Absent;
                                 state.estimator.on_change();
-                                if tx
-                                    .send(Event::new(EventKind::Remove(RemoveKind::File)).add_path(state.path.clone()))
-                                    .is_err()
-                                {
+                                if tx.send((Change::Removed, vec![state.path.clone()])).is_err() {
                                     return;
                                 }
                             } else {
@@ -205,7 +179,7 @@ where
 
     loop {
         match rx.recv() {
-            Ok(event) => handle(event)?,
+            Ok((change, paths)) => handle(change, &paths)?,
             Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
         }
     }

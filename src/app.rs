@@ -35,7 +35,7 @@ use crate::{
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
     },
-    fsmon::{self, EventKind},
+    fsmon::{self, Change},
     help,
     index::{Indexer, IndexerSettings, Timestamp},
     input::{BlockEntry, Input, InputDescriptor, InputHolder, InputReference},
@@ -687,9 +687,9 @@ impl App {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
-                        fsmon::run(vec![path.canonical.clone()], |event| {
-                            match event.kind {
-                                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
+                        fsmon::run(vec![path.canonical.clone()], |change| {
+                            match change {
+                                Change::Modified => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
                                         let replaced = old_meta.len() > new_meta.len() || old_meta.file_id() != new_meta.file_id();
                                         if replaced && input.is_some() {
@@ -707,11 +707,10 @@ impl App {
                                     }
                                     Ok(())
                                 }
-                                EventKind::Remove(_) => {
+                                Change::Removed => {
                                     input = None;
                                     process(&mut input, false).map(|_| ())
                                 },
-                                EventKind::Access(_) => Ok(()),
                             }
                         })
                     } else {
