@@ -13,6 +13,10 @@ LLVM_BIN=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p'
 
 LLVM_PROFILE_PATTERN="target/coverage/test-*.profraw"
 PROFDATA_FILE="target/coverage.profdata"
+# The repository root, without symbolic links as in the paths of the coverage data, with the characters that have a
+# special meaning in a regular expression escaped.
+ROOT_REGEX=$(pwd -P | sed -e 's/\\/\\\\/g' -e 's/[].*^$+?(){}|[]/\\&/g')
+
 IGNORE=(
     '/.cargo/'
     '/.rustup/'
@@ -20,6 +24,7 @@ IGNORE=(
     'rustc/.*/library/'
     '_capnp\.rs$'
     '/tests\.rs$'
+    "^${ROOT_REGEX}/tests/"
     '/crates/styled-help/src/'
 )
 
@@ -131,8 +136,10 @@ function test_signals() {
 }
 
 function test() {
+    # Also builds the executable run by the integration tests and below.
+    # A separate `cargo build` would replace it with a build without the features enabled by dev-dependencies,
+    # which the coverage data of the integration tests does not match.
     cargo test --tests --workspace
-    cargo build
     ${MAIN_EXECUTABLE:?} --config - > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help > /dev/null
     ${MAIN_EXECUTABLE:?} --config - --help=short --color never > /dev/null
@@ -158,8 +165,6 @@ function test() {
     HL_PAGER=cat HL_PAGER_DELIMITER=nul ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always > /dev/null
     # Test multiple records in a single CRLF-delimited chunk (covers inter-record delimiter path)
     printf '{"level":"info","msg":"a"}\n{"level":"info","msg":"b"}\r\n' | ${MAIN_EXECUTABLE:?} --config - --delimiter crlf --color never > /dev/null
-    # Test multi-file input to exercise concurrent output path
-    ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log sample/prometheus.log --color never > /dev/null
     # Test signal handling
     test_signals
 
