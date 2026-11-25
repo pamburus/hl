@@ -1,12 +1,14 @@
 // std imports
 use std::{
     cmp::{Reverse, max},
+    collections::{BTreeMap, HashMap},
     convert::{TryFrom, TryInto},
     fs,
-    io::{BufWriter, Cursor, Read, Write},
+    io::{BufWriter, Read, Write},
     num::NonZeroUsize,
     ops::Range,
     path::PathBuf,
+    rc::Rc,
     str,
     sync::Arc,
     time::{Duration, Instant},
@@ -38,14 +40,10 @@ use crate::{
     fsmon::{self, EventKind},
     help,
     index::{Indexer, IndexerSettings, Timestamp},
-    input::{BlockEntry, Input, InputDescriptor, InputHolder, InputReference},
-    model::{Filter, Origin, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
-    output::{BufFactory, Chunk, OutputBuf},
+    input::{BlockEntry, Input, InputHolder, InputReference},
+    model::{Filter, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     query::Query,
-    scanning::{
-        Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, SearchProgress, Segment, SegmentBuf,
-        SegmentBufFactory,
-    },
+    scanning::{BufFactory, Delimit, Delimiter, Newline, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory},
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
     themecfg,
@@ -56,12 +54,6 @@ use crate::{
 // test imports
 #[cfg(test)]
 use crate::testing::Sample;
-
-// ---
-
-mod follow;
-
-use follow::{Due, MergeWindow, MergeWriter};
 
 // ---
 
@@ -294,7 +286,7 @@ impl App {
 
     pub fn run(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
         if self.options.follow {
-            self.follow(inputs, output)
+            self.follow(inputs.into_iter().map(|x| x.reference).collect(), output)
         } else if self.options.sort {
             self.sort(inputs, output)
         } else {
@@ -303,13 +295,7 @@ impl App {
     }
 
     fn cat(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        let descriptors = inputs
-            .iter()
-            .map(|x| &x.reference)
-            .enumerate()
-            .map(Into::into)
-            .collect_vec();
-        let input_badges = self.input_badges(&descriptors);
+        let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
 
         let inputs = inputs
             .into_iter()
@@ -318,61 +304,43 @@ impl App {
 
         let n = self.options.concurrency;
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
-        let bfo = Arc::new(BufFactory::new(self.options.buffer_size.into()));
+        let bfo = BufFactory::new(self.options.buffer_size.into());
         let parser = self.parser();
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
             let (txi, rxi): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded(1)).unzip();
             // prepare receive/transmit channels for output data
-            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded::<(usize, Chunk)>(1)).unzip();
+            let (txo, rxo): (Vec<_>, Vec<_>) = (0..n).map(|_| channel::bounded::<(usize, SegmentBuf)>(1)).unzip();
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let mut tx = StripedSender::new(txi);
                 let scanner = Scanner::new(sfi, &self.options.delimiter);
                 for (i, mut input) in inputs.into_iter().enumerate() {
-                    let mut offset = 0;
                     for item in scanner.items(&mut input.stream.as_sequential()).with_max_segment_size(self.options.max_message_size.into()) {
-                        let item = item?;
-                        let len = item.data().len();
-                        if tx.send((i, offset, item)).is_none() {
+                        if tx.send((i, item?)).is_none() {
                             break;
                         }
-                        offset += len as u64;
                     }
                 }
                 Ok(())
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref bfo, ref parser, ref descriptors, ref input_badges, |_| {
+                scope.spawn(closure!(ref bfo, ref parser, ref sfi, ref input_badges, |_| {
                     let mut processor = self.new_segment_processor(parser);
-                    let show_unparsed = self.allow_unparsed_data();
-                    for (i, offset, segment) in rxi.iter() {
+                    for (i, segment) in rxi.iter() {
                         let prefix = input_badges.as_ref().map(|b|b[i].as_str()).unwrap_or("");
                         match segment {
                             Segment::Complete(segment) => {
                                 let mut buf = bfo.new_buf();
-                                let origin = Origin::new(&descriptors[i], offset, segment.data().len());
-                                processor.process(segment.data(), &mut buf, origin, prefix, None, &mut RecordIgnorer{});
-                                drop(segment);
-                                if txo.send((i, Chunk::Output(buf))).is_err() {
+                                processor.process(segment.data(), &mut buf, prefix, None, &mut RecordIgnorer{});
+                                sfi.recycle(segment);
+                                if txo.send((i, buf.into())).is_err() {
                                     break;
                                 };
                             }
-                            Segment::Incomplete(segment, part, delimiter) => {
-                                // A log entry too large to be read at once is shown as is, part by part,
-                                // like other text that is not a record. Every segment is sent, even
-                                // with nothing to show, as the writer takes them in order.
-                                // The last part ends with the output delimiter instead of the input one, if any.
-                                let segment = if !show_unparsed {
-                                    drop(segment);
-                                    SegmentBuf::from(b"")
-                                } else if part == PartialPlacement::Last {
-                                    end_last_part(segment, delimiter, self.options.output_delimiter.as_bytes())
-                                } else {
-                                    segment
-                                };
-                                if txo.send((i, Chunk::Segment(segment))).is_err() {
+                            Segment::Incomplete(segment, _) => {
+                                if txo.send((i, segment)).is_err() {
                                     break;
                                 }
                             }
@@ -381,12 +349,13 @@ impl App {
                 }));
             }
             // spawn writer thread
-            let writer = scope.spawn(|_| -> Result<()> {
+            let writer = scope.spawn(closure!(ref bfo, |_| -> Result<()> {
                 for (_, buf) in StripedReceiver::new(rxo) {
                     output.write_all(buf.data())?;
+                    bfo.recycle(buf.into_inner());
                 }
                 Ok(())
-            });
+            }));
             // collect errors from reader and writer threads
             reader.join().unwrap()?;
             writer.join().unwrap()?;
@@ -420,13 +389,7 @@ impl App {
         fs::create_dir_all(&cache_dir)?;
 
         let indexer = Indexer::new(self.options.concurrency, cache_dir, indexer_settings);
-        let descriptors = inputs
-            .iter()
-            .map(|x| &x.reference)
-            .enumerate()
-            .map(Into::into)
-            .collect_vec();
-        let input_badges = self.input_badges(&descriptors);
+        let input_badges = self.input_badges(inputs.iter().map(|x| &x.reference));
 
         let inputs = inputs
             .into_iter()
@@ -474,20 +437,20 @@ impl App {
                             return None;
                         }
                         if let Some((ts_min, ts_max)) = src.stat.ts_min_max {
-                            if let Some(until) = self.options.filter.basic.until
-                                && ts_min > until.into()
-                            {
-                                return None;
+                            if let Some(until) = self.options.filter.basic.until {
+                                if ts_min > until.into() {
+                                    return None;
+                                }
                             }
-                            if let Some(since) = self.options.filter.basic.since
-                                && ts_max < since.into()
-                            {
-                                return None;
+                            if let Some(since) = self.options.filter.basic.since {
+                                if ts_max < since.into() {
+                                    return None;
+                                }
                             }
-                            if let Some(level) = self.options.filter.basic.level
-                                && !src.match_level(level)
-                            {
-                                return None;
+                            if let Some(level) = self.options.filter.basic.level {
+                                if !src.match_level(level) {
+                                    return None;
+                                }
                             }
                             let offset = block.offset();
                             Some((block, ts_min, ts_max, i, offset))
@@ -510,27 +473,19 @@ impl App {
             // spawn worker threads
             let mut workers = Vec::with_capacity(n);
             for (rxp, txw) in izip!(rxp, txw) {
-                workers.push(scope.spawn(closure!(
-                    ref parser,
-                    ref descriptors,
-                    ref input_badges,
-                    |_| -> Result<()> {
-                        let mut processor = self.new_segment_processor(parser);
-                        for (block, ts_min, i, j) in rxp.iter() {
-                            let block_offset = block.offset();
-                            let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
-                            let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
-                            for line in block.into_entries()? {
-                                if line.is_empty() {
-                                    continue;
-                                }
-                                let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
-                                let origin =
-                                    Origin::new(&descriptors[i], block_offset + line.offset() as u64, line.len());
-                                processor.process(
+                workers.push(scope.spawn(closure!(ref parser, ref input_badges, |_| -> Result<()> {
+                    let mut processor = self.new_segment_processor(parser);
+                    for (block, ts_min, i, j) in rxp.iter() {
+                        let mut buf = Vec::with_capacity(2 * usize::try_from(block.size())?);
+                        let mut items = Vec::with_capacity(2 * usize::try_from(block.entries_valid())?);
+                        for line in block.into_entries()? {
+                            if line.is_empty() {
+                                continue;
+                            }
+                            let prefix = input_badges.as_ref().map(|b| b[i].as_str()).unwrap_or("");
+                            processor.process(
                                 line.bytes(),
                                 &mut buf,
-                                origin,
                                 prefix,
                                 Some(1),
                                 &mut |record: &Record, location: Range<usize>| {
@@ -546,16 +501,15 @@ impl App {
                                     }
                                 },
                             );
-                            }
-
-                            let buf = Arc::new(buf);
-                            if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
-                                break;
-                            }
                         }
-                        Ok(())
+
+                        let buf = Arc::new(buf);
+                        if txw.send((OutputBlock { ts_min, buf, items }, i, j)).is_err() {
+                            break;
+                        }
                     }
-                )));
+                    Ok(())
+                })));
             }
             // spawn merger thread
             let merger = scope.spawn(|_| -> Result<()> {
@@ -621,7 +575,7 @@ impl App {
         Ok(())
     }
 
-    fn prepare_follow_badges(&self, inputs: &[InputDescriptor]) -> FollowBadges {
+    fn prepare_follow_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> FollowBadges {
         let si = SyncIndicator::from(&self.options.theme.indicators.sync);
 
         let mut badges = self.input_badges(inputs);
@@ -634,20 +588,14 @@ impl App {
         FollowBadges { si, input: badges }
     }
 
-    fn follow(&self, inputs: Vec<InputHolder>, output: &mut Output) -> Result<()> {
-        let descriptors = inputs
-            .iter()
-            .map(|x| &x.reference)
-            .enumerate()
-            .map(Into::into)
-            .collect_vec();
-        let badges = self.prepare_follow_badges(&descriptors);
+    fn follow(&self, inputs: Vec<InputReference>, output: &mut Output) -> Result<()> {
+        let badges = self.prepare_follow_badges(inputs.iter());
 
         let m = inputs.len();
         let n = self.options.concurrency;
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
-        let bfo = Arc::new(BufFactory::new(self.options.buffer_size.into()));
+        let bfo = BufFactory::new(self.options.buffer_size.into());
 
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -656,30 +604,22 @@ impl App {
             let (txo, rxo) = channel::bounded(1);
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
-            for (i, holder) in inputs.into_iter().enumerate() {
+            for (i, input_ref) in inputs.into_iter().enumerate() {
                 let delimiter = &self.options.delimiter;
                 let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
                     let scanner = Scanner::new(sfi.clone(), delimiter.clone());
-                    let input_ref = holder.reference.clone();
-                    // The file read is the one opened before, which may already be
-                    // rotated, so its replacement is detected by its own metadata.
-                    let mut meta = holder.metadata()?;
-                    let mut input = holder.open()?.tail(self.options.tail, delimiter.clone())?;
+                    let mut meta = None;
+                    if let InputReference::File(path) = &input_ref {
+                        meta = Some(fs::metadata(&path.canonical)?);
+                    }
+                    let mut input = Some(input_ref.open()?.tail(self.options.tail, delimiter.clone())?);
                     let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
-                    let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), self.options.max_message_size.into());
-                    blocks.start(input.position()?);
-                    let mut input = Some(input);
-                    // Only a regular file is scanned again when it grows, so only there
-                    // an unterminated tail is held back to be completed by the next scan.
-                    // Without an input, a tail held from the previous one is flushed.
+                    let mut blocks = BlockScanner::new(&scanner, self.options.max_message_size.into());
                     let mut process = |input: &mut Option<Input>, is_file: bool| {
                         if let Some(input) = input {
-                            blocks.scan(&mut input.stream.as_sequential(), i, &txi, is_file)?;
+                            blocks.scan(&mut input.stream.as_sequential(), i, &txi)?;
                             Ok(!is_file)
                         } else {
-                            blocks.scan(&mut std::io::empty(), i, &txi, false)?;
-                            // The next input is a newly opened file read from its start.
-                            blocks.start(0);
                             Ok(false)
                         }
                     };
@@ -691,11 +631,11 @@ impl App {
                             match event.kind {
                                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
-                                        let replaced = old_meta.len() > new_meta.len() || old_meta.file_id() != new_meta.file_id();
-                                        if replaced && input.is_some() {
-                                            // The rest of the old file will not come, flush its tail.
+                                        if old_meta.len() > new_meta.len() {
                                             input = None;
-                                            process(&mut input, false)?;
+                                        }
+                                        if old_meta.file_id() != new_meta.file_id() {
+                                            input = None;
                                         }
                                         meta = Some(new_meta);
                                     }
@@ -709,7 +649,7 @@ impl App {
                                 }
                                 EventKind::Remove(_) => {
                                     input = None;
-                                    process(&mut input, false).map(|_| ())
+                                    Ok(())
                                 },
                                 EventKind::Access(_) => Ok(()),
                             }
@@ -726,8 +666,8 @@ impl App {
             let mut workers = Vec::with_capacity(n);
             for _ in 0..n {
                 let worker = scope.spawn(
-                    closure!(ref bfo, ref parser, ref badges, ref descriptors, clone rxi, clone txo, |_| {
-                        self.process_segments(parser, bfo, badges, descriptors, rxi, txo);
+                    closure!(ref bfo, ref parser, ref sfi, ref badges, clone rxi, clone txo, |_| {
+                        self.process_segments(parser, bfo, sfi, badges, rxi, txo);
                     }),
                 );
                 workers.push(worker);
@@ -754,48 +694,35 @@ impl App {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_segments(
         &self,
         parser: &Parser,
-        bfo: &Arc<BufFactory>,
+        bfo: &BufFactory,
+        sfi: &SegmentBufFactory,
         badges: &FollowBadges,
-        inputs: &[InputDescriptor],
-        rxi: Receiver<(usize, usize, u64, Segment)>,
-        txo: Sender<(usize, OutputBuf, TimestampIndex)>,
+        rxi: Receiver<(usize, usize, Segment)>,
+        txo: Sender<(usize, Vec<u8>, TimestampIndex)>,
     ) {
         let mut processor = self.new_segment_processor(parser);
-        for (i, j, offset, segment) in rxi.iter() {
-            let prefix = badges.prefix(i);
+        for (i, j, segment) in rxi.iter() {
+            let prefix = badges
+                .input
+                .as_ref()
+                .map(|b| b[i].as_str())
+                .unwrap_or(&badges.si.placeholder);
             match segment {
                 Segment::Complete(segment) => {
                     let mut buf = bfo.new_buf();
                     let mut index_builder = TimestampIndexBuilder {
                         result: TimestampIndex::new(j),
                     };
-                    let origin = Origin::new(&inputs[i], offset, segment.data().len());
-                    processor.process(segment.data(), &mut buf, origin, prefix, None, &mut index_builder);
-                    drop(segment);
+                    processor.process(segment.data(), &mut buf, prefix, None, &mut index_builder);
+                    sfi.recycle(segment);
                     if txo.send((i, buf, index_builder.result)).is_err() {
                         return;
                     };
                 }
-                Segment::Incomplete(segment, part, delimiter) => {
-                    // A log entry too large to be read at once is shown as is, part by part,
-                    // like other text that is not a record. Every block is sent, even
-                    // with nothing to show, as the merger takes them in order.
-                    let mut index = TimestampIndex::new(j);
-                    let buf = if !self.allow_unparsed_data() {
-                        drop(segment);
-                        Vec::new().into()
-                    } else {
-                        index.part = Some(part);
-                        split_entry_part(segment, part, delimiter, prefix)
-                    };
-                    if txo.send((i, buf, index)).is_err() {
-                        return;
-                    };
-                }
+                Segment::Incomplete(_, _) => {}
             }
         }
     }
@@ -803,42 +730,111 @@ impl App {
     fn merge_segments(
         &self,
         badges: &FollowBadges,
-        rxo: Receiver<(usize, OutputBuf, TimestampIndex)>,
+        rxo: Receiver<(usize, Vec<u8>, TimestampIndex)>,
         output: &mut Output,
         concurrency: usize,
     ) -> Result<()> {
-        let delim = self.options.output_delimiter.as_bytes();
+        type Key = (Timestamp, usize, usize, usize); // (ts, input, block, offset)
+        type Line = (Rc<Vec<u8>>, Range<usize>, Instant); // (buf, location, instant)
+
+        let mut window = BTreeMap::<Key, Line>::new();
+        let mut last_ts: Option<Timestamp> = None;
+        let mut prev_ts: Option<Timestamp> = None;
+        let mut source_last_ts: HashMap<usize, Timestamp> = HashMap::new();
+        let mut mem_usage = 0;
         let mem_limit = concurrency * usize::from(self.options.buffer_size);
-        let mut window = MergeWindow::new(delim, mem_limit, self.options.sync_interval);
-        let mut writer = MergeWriter::new(badges, delim);
+        let sync_interval = self.options.sync_interval;
         let mut disconnected = false;
 
         loop {
             let now = Instant::now();
-            let mut written = false;
-            // Once all inputs are closed nothing can arrive to be sorted in
-            // between, so the rest of the window is flushed right away.
-            while let Some(due) = window.pop_due(now, disconnected) {
-                match due {
-                    Due::Entry(ts, entry) => writer.write(output, ts, &entry)?,
-                    Due::Resumed(i, entry) => writer.resume(output, i, &entry)?,
-                    Due::SplitEnd => writer.end_split(output)?,
+            while let Some(first) = window.first_key_value() {
+                // Once all inputs are closed nothing can arrive to be sorted in
+                // between, so the rest of the window is flushed right away.
+                let due = disconnected || mem_usage >= mem_limit || flush_wait(first.1.2, now, sync_interval).is_zero();
+                if !due {
+                    break;
                 }
-                written = true;
-            }
-
-            // Stdout flushes by itself only at a newline, so records ending with
-            // another delimiter are flushed here, before waiting for more input.
-            if written {
-                output.flush()?;
+                if let Some(entry) = window.pop_first() {
+                    let sync_indicator = if prev_ts.map(|ts| ts <= entry.0.0).unwrap_or(true) {
+                        &badges.si.synced
+                    } else {
+                        &badges.si.failed
+                    };
+                    prev_ts = Some(entry.0.0);
+                    mem_usage -= entry.1.1.end - entry.1.1.start;
+                    output.write_all(sync_indicator.as_bytes())?;
+                    output.write_all(&entry.1.0[entry.1.1.clone()][badges.si.width..])?;
+                    output.write_all(self.options.output_delimiter.as_bytes())?;
+                }
             }
 
             if disconnected {
                 break;
             }
 
-            match rxo.recv_timeout(window.wait(now)) {
-                Ok((i, buf, index)) => window.insert(i, buf, index, Instant::now()),
+            let timeout = window
+                .first_key_value()
+                .map(|first| flush_wait(first.1.2, now, sync_interval))
+                .unwrap_or(Duration::MAX);
+            match rxo.recv_timeout(timeout) {
+                Ok((i, buf, index)) => {
+                    let delim_len = self.options.output_delimiter.len();
+                    let delim = self.options.output_delimiter.as_bytes();
+                    let buf = Rc::new(buf);
+                    let now = Instant::now();
+
+                    // Iterate over gaps between indexed lines and insert them
+                    // into the window with the timestamp of the next indexed
+                    // line (or the last known timestamp for the source as
+                    // fallback for the trailing gap) so they get sorted
+                    // together with parsed records.
+                    let gap_starts =
+                        std::iter::once(0usize).chain(index.lines.iter().map(|l| l.location.end + delim_len));
+                    let gap_ends = index
+                        .lines
+                        .iter()
+                        .map(|l| l.location.start)
+                        .chain(std::iter::once(buf.len()));
+                    let gap_timestamps = index
+                        .lines
+                        .iter()
+                        .map(|l| Some(l.ts))
+                        .chain(std::iter::once(source_last_ts.get(&i).copied()));
+
+                    for ((start, end), ts) in gap_starts.zip(gap_ends).zip(gap_timestamps) {
+                        if start >= end {
+                            continue;
+                        }
+                        let trimmed = if end >= start + delim_len && buf[end - delim_len..end] == *delim {
+                            end - delim_len
+                        } else {
+                            end
+                        };
+                        if start < trimmed {
+                            if let Some(ts) = ts {
+                                mem_usage += trimmed - start;
+                                window.insert((ts, i, index.block, start), (buf.clone(), start..trimmed, now));
+                            } else {
+                                output.write_all(&buf[start..end])?;
+                            }
+                        }
+                    }
+
+                    // Insert indexed lines into the window.
+                    for line in index.lines {
+                        let ts = line.ts;
+                        source_last_ts
+                            .entry(i)
+                            .and_modify(|prev| *prev = max(*prev, ts))
+                            .or_insert(ts);
+                        last_ts = Some(last_ts.map(|v| max(v, ts)).unwrap_or(ts));
+                        mem_usage += line.location.end - line.location.start;
+                        let key = (ts, i, index.block, line.location.start);
+                        let value = (buf.clone(), line.location, now);
+                        window.insert(key, value);
+                    }
+                }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => disconnected = true,
             }
@@ -855,8 +851,14 @@ impl App {
         ))
     }
 
-    fn input_badges(&self, inputs: &[InputDescriptor]) -> Option<Vec<String>> {
-        let names = inputs.iter().map(|input| input.name.as_str()).collect_vec();
+    fn input_badges<'a, I: IntoIterator<Item = &'a InputReference>>(&self, inputs: I) -> Option<Vec<String>> {
+        let name = |input: &InputReference| match input {
+            InputReference::Stdin => "<stdin>".to_owned(),
+            InputReference::File(path) => path.original.to_string_lossy().to_string(),
+        };
+
+        let names = inputs.into_iter().map(name).collect_vec();
+        let mut badges = names.iter().map(|x| x.graphemes(true).collect_vec()).collect_vec();
 
         let ii = self.options.input_info;
 
@@ -866,67 +868,43 @@ impl App {
             return None;
         }
 
-        if ii.contains(InputInfo::None) && names.len() < 2 {
+        if ii.contains(InputInfo::None) && badges.len() < 2 {
             return None;
         }
 
-        let names = if ii.contains(InputInfo::Compact) {
-            self.compact_input_names(&names)
-        } else {
-            names.iter().map(|x| x.graphemes(true).collect_vec()).collect_vec()
-        };
-
-        Some(self.render_input_badges(names))
-    }
-
-    /// Shortens the input names for compact input badges.
-    ///
-    /// A common prefix longer than 7 characters is replaced with the common-part
-    /// marker, keeping its last 4 characters, and names that are still too long
-    /// are clipped in the middle. The names are returned as grapheme clusters.
-    fn compact_input_names<'a>(&'a self, names: &[&'a str]) -> Vec<Vec<&'a str>> {
-        let mut names = names.iter().map(|x| x.graphemes(true).collect_vec()).collect_vec();
-        let opt = &self.punctuation;
-
-        let pl = common_prefix_len(&names);
-        for name in names.iter_mut() {
-            let cl = opt.input_name_clipping.width();
-            if name.len() > 24 + cl + pl {
-                if pl > 7 {
-                    *name = opt
-                        .input_name_common_part
-                        .graphemes(true)
-                        .chain(name[pl - 4..pl + 8].iter().cloned())
-                        .chain(opt.input_name_clipping.graphemes(true))
-                        .chain(name[name.len() - 16..].iter().cloned())
-                        .collect();
-                } else {
-                    *name = name[0..pl + 12]
-                        .iter()
-                        .cloned()
-                        .chain(opt.input_name_clipping.graphemes(true))
-                        .chain(name[name.len() - 12..].iter().cloned())
-                        .collect();
-                }
-            } else if pl > 7 {
-                *name = opt
-                    .input_name_common_part
-                    .graphemes(true)
-                    .chain(name[pl - 4..].iter().cloned())
-                    .collect();
-            }
-        }
-
-        names
-    }
-
-    /// Renders themed input badges with the given input names, as grapheme clusters,
-    /// padded to the same width.
-    fn render_input_badges(&self, names: Vec<Vec<&str>>) -> Vec<String> {
-        let ii = self.options.input_info;
-        let mut badges = names;
         let num_width = format!("{}", badges.len()).len();
         let opt = &self.punctuation;
+
+        if ii.contains(InputInfo::Compact) {
+            let pl = common_prefix_len(&badges);
+            for badge in badges.iter_mut() {
+                let cl = opt.input_name_clipping.width();
+                if badge.len() > 24 + cl + pl {
+                    if pl > 7 {
+                        *badge = opt
+                            .input_name_common_part
+                            .graphemes(true)
+                            .chain(badge[pl - 4..pl + 8].iter().cloned())
+                            .chain(opt.input_name_clipping.graphemes(true))
+                            .chain(badge[badge.len() - 16..].iter().cloned())
+                            .collect();
+                    } else {
+                        *badge = badge[0..pl + 12]
+                            .iter()
+                            .cloned()
+                            .chain(opt.input_name_clipping.graphemes(true))
+                            .chain(badge[badge.len() - 12..].iter().cloned())
+                            .collect();
+                    }
+                } else if pl > 7 {
+                    *badge = opt
+                        .input_name_common_part
+                        .graphemes(true)
+                        .chain(badge[pl - 4..].iter().cloned())
+                        .collect();
+                }
+            }
+        }
 
         if let Some(max_width) = badges.iter().map(|badge| grapheme_slice_width(badge)).max() {
             for badge in badges.iter_mut() {
@@ -981,18 +959,13 @@ impl App {
             result.push(String::from_utf8(buf).unwrap());
         }
 
-        result
-    }
-
-    /// Returns whether text that is not a record is shown.
-    fn allow_unparsed_data(&self) -> bool {
-        self.options.filter.is_empty() && self.options.input_format.is_none()
+        Some(result)
     }
 
     fn new_segment_processor<'a>(&'a self, parser: &'a Parser) -> impl SegmentProcess + 'a {
         let options = SegmentProcessorOptions {
             allow_prefix: self.options.allow_prefix,
-            allow_unparsed_data: self.allow_unparsed_data(),
+            allow_unparsed_data: self.options.filter.is_empty() && self.options.input_format.is_none(),
             delimiter: self.options.delimiter.clone(),
             input_format: self.options.input_format,
             output_delimiter: self.options.output_delimiter.clone(),
@@ -1058,7 +1031,6 @@ pub trait SegmentProcess {
         &mut self,
         data: &[u8],
         buf: &mut Vec<u8>,
-        origin: Origin<'_>,
         prefix: &str,
         limit: Option<usize>,
         observer: &mut O,
@@ -1108,22 +1080,14 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
 impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProcess
     for SegmentProcessor<'a, Formatter, Filter>
 {
-    fn process<O>(
-        &mut self,
-        data: &[u8],
-        buf: &mut Vec<u8>,
-        origin: Origin<'_>,
-        prefix: &str,
-        limit: Option<usize>,
-        observer: &mut O,
-    ) where
+    fn process<O>(&mut self, data: &[u8], buf: &mut Vec<u8>, prefix: &str, limit: Option<usize>, observer: &mut O)
+    where
         O: RecordObserver,
     {
         let mut i = 0;
         let limit = limit.unwrap_or(usize::MAX);
 
         for chunk in self.delim.split(data) {
-            let chunk_offset = chunk.as_ptr() as usize - data.as_ptr() as usize;
             if chunk.is_empty() {
                 if self.show_unparsed() {
                     buf.extend(prefix.as_bytes());
@@ -1142,12 +1106,12 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
             while let Some(Ok(ar)) = stream.next() {
                 i += 1;
                 last_offset = ar.offsets.end;
+                if parsed_some {
+                    buf.extend(self.options.output_delimiter.as_bytes());
+                }
                 parsed_some = true;
                 let record = self.parser.parse(&ar.record);
                 if record.matches(&self.filter) {
-                    if produced_some {
-                        buf.extend(self.options.output_delimiter.as_bytes());
-                    }
                     let begin = buf.len();
                     if ar.prefix.is_empty() {
                         buf.extend(prefix.as_bytes());
@@ -1166,12 +1130,8 @@ impl<'a, Formatter: RecordWithSourceFormatter, Filter: RecordFilter> SegmentProc
                         }
                     }
                     let prefix_range = begin..buf.len();
-                    let source_range = chunk_offset + ar.offsets.start..chunk_offset + ar.offsets.end;
-                    self.formatter.format_record(
-                        buf,
-                        prefix_range,
-                        record.with_source(&chunk[ar.offsets], origin.slice(source_range)),
-                    );
+                    self.formatter
+                        .format_record(buf, prefix_range, record.with_source(&chunk[ar.offsets]));
                     let end = buf.len();
                     observer.observe_record(&record, begin..end);
                     produced_some = true;
@@ -1224,218 +1184,29 @@ impl RecordObserver for RecordIgnorer {
 /// therefore lives here and keeps counting across scans: it is part of the
 /// merge window key `(ts, input, block, offset)`, and restarting it makes lines
 /// of different scans collide on one key, where all but the last are lost.
-///
-/// For the same reason it also keeps the unterminated tail of the stream: end of
-/// file in the middle of a line usually means the writer has not finished it
-/// yet, so the tail is held back and prepended to the data of the next scan.
-/// A tail too long to be held is a part of a log entry too large to be read at
-/// once. It is passed on, and the entry is left open to be continued by the next scan.
-///
-/// Each segment is also sent with its byte offset in the stream, which keeps
-/// counting across scans until [`BlockScanner::start`] starts a new stream.
 struct BlockScanner<'a, D: Delimit> {
     scanner: &'a Scanner<D>,
-    searcher: D::Searcher,
     max_segment_size: usize,
     block: usize,
-    offset: u64,
-    tail: HeldTail,
-    open: bool,
 }
 
 impl<'a, D: Delimit> BlockScanner<'a, D> {
-    fn new(scanner: &'a Scanner<D>, delimiter: D, max_segment_size: usize) -> Self {
+    fn new(scanner: &'a Scanner<D>, max_segment_size: usize) -> Self {
         Self {
             scanner,
-            searcher: delimiter.into_searcher(),
             max_segment_size,
             block: 0,
-            offset: 0,
-            tail: HeldTail::default(),
-            open: false,
         }
     }
 
-    /// Starts counting byte offsets from `offset` for a new stream, such as a replaced file,
-    /// or for a stream that is read from the middle, such as a file seeked to its tail.
-    /// Block numbers keep counting, as they must stay unique for the input.
-    fn start(&mut self, offset: u64) {
-        self.offset = offset;
-    }
-
-    /// Scans the held tail followed by `stream` up to its end.
-    ///
-    /// With `hold_tail`, the data after the last delimiter is held back for the
-    /// next scan instead of being sent as a complete segment, and a log entry too
-    /// large to be read at once is left open. Without it, all data is sent, which
-    /// also flushes a tail held by a previous scan and ends an entry left open.
-    fn scan(
-        &mut self,
-        stream: &mut dyn Read,
-        i: usize,
-        txi: &Sender<(usize, usize, u64, Segment)>,
-        hold_tail: bool,
-    ) -> Result<()> {
-        let tail = std::mem::take(&mut self.tail);
-        let mut holding = None;
-        let mut chained = None;
-        let reader: &mut dyn Read = if hold_tail {
-            holding.insert(TailHoldingReader::new(
-                tail,
-                stream,
-                &self.searcher,
-                self.max_segment_size,
-            ))
-        } else {
-            chained.insert(Cursor::new(tail.data).chain(stream))
-        };
-        let items = self
-            .scanner
-            .items(reader)
-            .continuing(self.open)
-            .open_ended(hold_tail)
-            .with_max_segment_size(self.max_segment_size);
-        let mut position = (&mut self.block, &mut self.offset);
-        let mut open = self.open;
-        for item in items {
-            let item = item?;
-            open = matches!(
-                item,
-                Segment::Incomplete(_, PartialPlacement::First | PartialPlacement::Next, _)
-            );
-            if !Self::send(&mut position, item, i, txi) {
+    fn scan(&mut self, stream: &mut dyn Read, i: usize, txi: &Sender<(usize, usize, Segment)>) -> Result<()> {
+        for item in self.scanner.items(stream).with_max_segment_size(self.max_segment_size) {
+            if txi.send((i, self.block, item?)).is_err() {
                 break;
             }
-        }
-        self.open = open;
-        if let Some(reader) = holding {
-            self.tail = reader.into_tail();
+            self.block += 1;
         }
         Ok(())
-    }
-
-    /// Sends `segment` at the block number and offset of `position`, and advances them if it was received.
-    fn send(
-        (block, offset): &mut (&mut usize, &mut u64),
-        segment: Segment,
-        i: usize,
-        txi: &Sender<(usize, usize, u64, Segment)>,
-    ) -> bool {
-        let len = segment.data().len();
-        if txi.send((i, **block, **offset, segment)).is_err() {
-            return false;
-        }
-        **block += 1;
-        **offset += len as u64;
-        true
-    }
-}
-
-// ---
-
-/// Data held back by a [`TailHoldingReader`] for the next scan, with what its search for the delimiter found out.
-#[derive(Default)]
-struct HeldTail {
-    data: Vec<u8>,
-    progress: SearchProgress,
-}
-
-// ---
-
-/// Reads a previously held tail followed by an inner stream, and holds back the
-/// data after the last delimiter once the inner stream reaches its end.
-///
-/// The held data stops growing at `limit` bytes after the last delimiter: a line
-/// that long is passed on even if unterminated, as the scanner would split it
-/// into parts anyway.
-///
-/// The held data is searched for the delimiter only where it has grown since it was last searched,
-/// in this or a previous scan, as a tail that grows to the limit would otherwise be searched again
-/// with each chunk read.
-struct TailHoldingReader<'a, S> {
-    inner: &'a mut dyn Read,
-    searcher: &'a S,
-    limit: usize,
-    buf: Vec<u8>,
-    // `buf[pos..ready]` can be passed on, `buf[ready..]` is held back.
-    pos: usize,
-    ready: usize,
-    // What the search for the delimiter in `buf` found out, see [`Search::search_r_incremental`].
-    progress: SearchProgress,
-}
-
-impl<'a, S: Search> TailHoldingReader<'a, S> {
-    const CHUNK_SIZE: usize = 64 * 1024;
-
-    /// Returns a reader of `tail` followed by `inner`.
-    fn new(tail: HeldTail, inner: &'a mut dyn Read, searcher: &'a S, limit: usize) -> Self {
-        Self {
-            inner,
-            searcher,
-            limit,
-            buf: tail.data,
-            pos: 0,
-            ready: 0,
-            progress: tail.progress,
-        }
-    }
-
-    /// Returns the data that has not been read.
-    fn into_tail(mut self) -> HeldTail {
-        self.drop_read();
-        HeldTail {
-            data: self.buf,
-            progress: self.progress,
-        }
-    }
-
-    /// Drops the data that has been read.
-    fn drop_read(&mut self) {
-        if self.pos != 0 {
-            self.buf.drain(..self.pos);
-            self.ready -= self.pos;
-            self.pos = 0;
-            // The search depends on the data before a delimiter, so what it found out no longer holds.
-            self.progress = SearchProgress::default();
-        }
-    }
-}
-
-impl<S: Search> Read for TailHoldingReader<'_, S> {
-    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
-        // Nothing can be passed on to an empty buffer, so the inner stream is left for the next read.
-        if out.is_empty() {
-            return Ok(0);
-        }
-
-        while self.pos == self.ready {
-            self.drop_read();
-
-            let len = self.buf.len();
-            self.buf.resize(len + Self::CHUNK_SIZE, 0);
-            let n = self.inner.read(&mut self.buf[len..]);
-            self.buf.truncate(len + n.as_ref().copied().unwrap_or(0));
-            if n? == 0 {
-                return Ok(0);
-            }
-
-            let found = self.searcher.search_r_incremental(&self.buf, &mut self.progress);
-            if found.is_some() {
-                // The next search starts over, whether or not the data before the delimiter is read by then.
-                self.progress = SearchProgress::default();
-            }
-            let end = found.map(|r| r.end).unwrap_or(0);
-            self.ready = if self.buf.len() - end >= self.limit {
-                self.buf.len()
-            } else {
-                end
-            };
-        }
-
-        let n = out.len().min(self.ready - self.pos);
-        out[..n].copy_from_slice(&self.buf[self.pos..self.pos + n]);
-        self.pos += n;
-        Ok(n)
     }
 }
 
@@ -1445,48 +1216,6 @@ impl<S: Search> Read for TailHoldingReader<'_, S> {
 /// follow mode merge window, as of `now`; zero means it is due for output.
 fn flush_wait(received: Instant, now: Instant, sync_interval: Duration) -> Duration {
     sync_interval.saturating_sub(now.saturating_duration_since(received))
-}
-
-/// Returns the data of `segment`, a part of a log entry too large to be read at once, to be sent to the follow mode merger.
-///
-/// The merger counts only the data toward its memory limit, so a part is sent in its own buffer only if it fills most of it,
-/// as a part in the middle usually does. Any other part is copied into a buffer of its size: the first part, which also gets
-/// `prefix`, the last part, which loses its trailing `delimiter` and a line break before it, see [`last_part_len`], and a part
-/// in the middle cut short by the end of a file still being written.
-fn split_entry_part(segment: SegmentBuf, part: PartialPlacement, delimiter: usize, prefix: &str) -> OutputBuf {
-    if part == PartialPlacement::Next && segment.len() * 2 >= segment.capacity() {
-        return segment.into_data().into();
-    }
-    let mut data = segment.data();
-    let prefix = if part == PartialPlacement::First { prefix } else { "" };
-    if part == PartialPlacement::Last {
-        data = &data[..last_part_len(data, delimiter)];
-    }
-    let mut buf = Vec::with_capacity(prefix.len() + data.len());
-    buf.extend_from_slice(prefix.as_bytes());
-    buf.extend_from_slice(data);
-    buf.into()
-}
-
-/// Ends the last part of a log entry too large to be read at once with the output delimiter instead of the input one, if any,
-/// and a line break before it, see [`last_part_len`].
-fn end_last_part(mut segment: SegmentBuf, delimiter: usize, output_delimiter: &[u8]) -> SegmentBuf {
-    segment.truncate(last_part_len(segment.data(), delimiter));
-    segment.extend_from_slice(output_delimiter);
-    segment
-}
-
-/// Returns the length of the last part of a log entry too large to be read at once without the delimiter it ends with,
-/// and without a line break before it, which is dropped too when text that is not a record is split into lines.
-///
-/// Only the last part itself is looked at, so a line break that ends the part before it is kept, see #1709.
-#[inline]
-fn last_part_len(data: &[u8], delimiter: usize) -> usize {
-    // Only the end is checked, as searching for the line break would scan the whole part when it has none.
-    match &data[..data.len() - delimiter] {
-        [rest @ .., b'\n'] => rest.len() - usize::from(rest.last() == Some(&b'\r')),
-        rest => rest.len(),
-    }
 }
 
 // ---
@@ -1518,8 +1247,6 @@ impl<T: FnMut(&Record, Range<usize>)> RecordObserver for T {
 struct TimestampIndex {
     block: usize,
     lines: Vec<TimestampIndexLine>,
-    /// The part of a log entry too large to be read at once that the block holds, if it holds one.
-    part: Option<PartialPlacement>,
 }
 
 impl TimestampIndex {
@@ -1527,7 +1254,6 @@ impl TimestampIndex {
         Self {
             block,
             lines: Vec::new(),
-            part: None,
         }
     }
 }
@@ -1603,16 +1329,6 @@ impl<T> StripedSender<T> {
 struct FollowBadges {
     si: SyncIndicator,
     input: Option<Vec<String>>,
-}
-
-impl FollowBadges {
-    /// Returns what an entry of input `i` starts with: its input badge, or the placeholder for the sync indicator.
-    fn prefix(&self, i: usize) -> &str {
-        self.input
-            .as_ref()
-            .map(|b| b[i].as_str())
-            .unwrap_or(&self.si.placeholder)
-    }
 }
 
 struct SyncIndicator {

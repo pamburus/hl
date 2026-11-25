@@ -1,9 +1,38 @@
-# hl Agent Guidelines
+# hl Development Guidelines
 
-## Contributing Rules
+Auto-generated from all feature plans. Last updated: 2026-02-04
 
-Before every change, read [`CONTRIBUTING.md`](CONTRIBUTING.md) and every document it lists under [Rules to Follow](CONTRIBUTING.md#rules-to-follow), and follow them. They apply to agents exactly as to human contributors. Read them again for each new change, even within the same session, because they may have changed since you last read them.
+## Constitution
 
-## Agent-Specific Rules
+Before starting any work, load and follow the project constitution at
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+Its principles are mandatory and take precedence over the guidelines below.
 
-- When you file an unrelated issue as described in [Unrelated Issues](CONTRIBUTING.md#unrelated-issues), search with `gh issue list --search "<keywords>" --state all`, create it with `gh issue create`, and mention it in your report to the user.
+Also follow [`docs/guidelines/branches-and-versioning.md`](docs/guidelines/branches-and-versioning.md) for branches and version bumps, and [`docs/guidelines/commits.md`](docs/guidelines/commits.md) for commits.
+
+## Active Technologies
+
+- Rust (stable, edition 2024) + serde (config deserialization), clap (CLI argument parsing) (009-key-prettification)
+
+## Project Structure
+
+```text
+src/
+tests/
+```
+
+## Commands
+
+- cargo test
+- cargo clippy
+
+## Code Style
+
+Rust (stable, edition 2024): Follow standard conventions
+
+## Recent Changes
+
+- 009-key-prettification: Added Rust (stable, edition 2024) + serde (config deserialization), clap (CLI argument parsing)
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

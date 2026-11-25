@@ -64,12 +64,6 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
     cargo install --locked --git https://github.com/pamburus/hl.git
     ```
 
-* Install a prebuilt binary using [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
-
-    ```sh
-    cargo binstall --git https://github.com/pamburus/hl hl
-    ```
-
 * Download latest release from [download page](https://github.com/pamburus/hl/releases/latest)
 
 </details>
@@ -101,12 +95,6 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
     ```sh
     cargo install --locked --git https://github.com/pamburus/hl.git
-    ```
-
-* Install a prebuilt binary using [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
-
-    ```sh
-    cargo binstall --git https://github.com/pamburus/hl hl
     ```
 
 </details>
@@ -143,12 +131,6 @@ High-performance log viewer and processor that transforms logs in JSON and logfm
 
     ```sh
     cargo install --locked --git https://github.com/pamburus/hl.git
-    ```
-
-* Install a prebuilt binary using [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
-
-    ```sh
-    cargo binstall --git https://github.com/pamburus/hl hl
     ```
 
 </details>
@@ -598,8 +580,6 @@ See other [screenshots](https://github.com/pamburus/hl-extra/blob/37b444fcd81256
 
     Runs without a pager in follow mode, following the changes in three log files in the current directory and sorting them chronologically at a default interval of 100ms.
     Preloads 100 lines from the end of each file before filtering.
-
-Follow mode runs until it is stopped. Stopping it with Ctrl-C or `SIGTERM` (e.g. `kill`, `docker stop`, or Kubernetes pod termination) exits with status 0.
 
 ### Configuration files
 

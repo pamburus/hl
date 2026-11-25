@@ -1,13 +1,19 @@
 // std imports
 use std::{
-    cmp::Ordering, collections::HashSet, convert::From, fmt, iter::IntoIterator, marker::PhantomData, ops::Range,
-    str::FromStr, sync::Arc,
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    convert::From,
+    fmt,
+    iter::IntoIterator,
+    marker::PhantomData,
+    ops::Range,
+    str::FromStr,
+    sync::Arc,
 };
 
 // third-party imports
 use chrono::{DateTime, Utc};
 use enumset::{EnumSet, EnumSetType, enum_set};
-use foldhash::HashMap;
 use regex::Regex;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use titlecase::titlecase;
@@ -21,7 +27,6 @@ use serde_logfmt::logfmt;
 use crate::{
     app::{InputFormat, UnixTimestampUnit},
     error::{Error, Result},
-    input::InputDescriptor,
     level::{self},
     serdex::StreamDeserializerWithOffsets,
     settings::PredefinedFields,
@@ -365,7 +370,7 @@ pub type RecordFields<'a> = heapopt::Vec<(&'a str, RawValue<'a>), RECORD_EXTRA_C
 // ---
 
 pub trait RecordWithSourceConstructor<'r, 's> {
-    fn with_source(&'r self, source: &'s [u8], origin: Origin<'r>) -> RecordWithSource<'r, 's>;
+    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's>;
 }
 
 // ---
@@ -404,52 +409,22 @@ impl<'a> Caller<'a> {
 
 // ---
 
-/// Where data, such as a record's source, comes from.
-#[derive(Clone, Debug)]
-pub struct Origin<'r> {
-    /// The input the data was read from.
-    pub input: &'r InputDescriptor,
-    /// The byte range of the data in the input after decompression,
-    /// which for an uncompressed file is the range in the file itself.
-    pub range: Range<u64>,
-}
-
-impl<'r> Origin<'r> {
-    /// Creates the origin of `len` bytes read from `input` at `offset`.
-    #[inline]
-    pub fn new(input: &'r InputDescriptor, offset: u64, len: usize) -> Self {
-        Self {
-            input,
-            range: offset..offset + len as u64,
-        }
-    }
-
-    /// Returns the origin of a part of the data, given by its range within the data.
-    #[inline]
-    pub fn slice(&self, range: Range<usize>) -> Self {
-        Self::new(self.input, self.range.start + range.start as u64, range.len())
-    }
-}
-
-// ---
-
 pub struct RecordWithSource<'r, 's> {
     pub record: &'r Record<'s>,
     pub source: &'s [u8],
-    pub origin: Origin<'r>,
 }
 
 impl<'r, 's> RecordWithSource<'r, 's> {
     #[inline]
-    pub fn new(record: &'r Record<'s>, source: &'s [u8], origin: Origin<'r>) -> Self {
-        Self { record, source, origin }
+    pub fn new(record: &'r Record<'s>, source: &'s [u8]) -> Self {
+        Self { record, source }
     }
 }
 
 impl<'r, 's> RecordWithSourceConstructor<'r, 's> for Record<'s> {
     #[inline]
-    fn with_source(&'r self, source: &'s [u8], origin: Origin<'r>) -> RecordWithSource<'r, 's> {
-        RecordWithSource::new(self, source, origin)
+    fn with_source(&'r self, source: &'s [u8]) -> RecordWithSource<'r, 's> {
+        RecordWithSource::new(self, source)
     }
 }
 
@@ -595,7 +570,7 @@ impl ParserSettings {
                 continue;
             };
 
-            let mut mapping = HashMap::default();
+            let mut mapping = HashMap::new();
             for (level, values) in &variant.values {
                 for value in values {
                     mapping.insert(value.clone(), *level);
@@ -624,7 +599,7 @@ impl ParserSettings {
     }
 
     fn build_block_for_name(&mut self, n: usize, name: &str, settings: FieldSettings, priority: usize) {
-        self.blocks[n].insert(name, (settings, priority));
+        self.blocks[n].fields.insert(name.to_owned(), (settings, priority));
         let mut remainder = name;
         while let Some(k) = remainder.rfind('.') {
             let (name, nested) = name.split_at(k);
@@ -643,7 +618,9 @@ impl ParserSettings {
                 .unwrap_or_else(|| {
                     let nest = self.blocks.len();
                     self.blocks.push(ParserSettingsBlock::default());
-                    self.blocks[n].insert(name, (FieldSettings::Nested(nest), priority));
+                    self.blocks[n]
+                        .fields
+                        .insert(name.to_string(), (FieldSettings::Nested(nest), priority));
                     nest
                 });
 
@@ -691,15 +668,9 @@ impl Default for ParserSettings {
 #[derive(Default, Debug)]
 struct ParserSettingsBlock {
     fields: HashMap<String, (FieldSettings, usize)>,
-    filter: KeyFilter,
 }
 
 impl ParserSettingsBlock {
-    fn insert(&mut self, name: &str, value: (FieldSettings, usize)) {
-        self.filter.insert(name);
-        self.fields.insert(name.to_owned(), value);
-    }
-
     fn apply<'a>(
         &self,
         ps: &ParserSettings,
@@ -734,10 +705,6 @@ impl ParserSettingsBlock {
         to: &mut Record<'a>,
         pc: &mut PriorityController,
     ) -> bool {
-        if !self.filter.may_contain(key) {
-            return false;
-        }
-
         match self.fields.get(key) {
             Some((field, priority)) => {
                 let kind = field.kind();
@@ -749,42 +716,6 @@ impl ParserSettingsBlock {
             }
             None => false,
         }
-    }
-}
-
-// ---
-
-/// Cheap check that rejects most keys that are not in a [`ParserSettingsBlock`] before a hash lookup.
-/// It tracks the lengths and the first bytes of the known keys, so it can give false positives but never false negatives.
-#[derive(Default, Debug)]
-struct KeyFilter {
-    lengths: u64,
-    first_bytes: [u64; 4],
-}
-
-impl KeyFilter {
-    fn insert(&mut self, key: &str) {
-        self.lengths |= Self::length_bit(key);
-        if let Some(&b) = key.as_bytes().first() {
-            self.first_bytes[(b >> 6) as usize] |= 1 << (b & 63);
-        }
-    }
-
-    #[inline]
-    fn may_contain(&self, key: &str) -> bool {
-        if self.lengths & Self::length_bit(key) == 0 {
-            return false;
-        }
-        match key.as_bytes().first() {
-            Some(&b) => self.first_bytes[(b >> 6) as usize] & (1 << (b & 63)) != 0,
-            None => true,
-        }
-    }
-
-    /// Returns the bit for the length of `key`, with all lengths of 63 and above sharing the last bit.
-    #[inline]
-    fn length_bit(key: &str) -> u64 {
-        1 << key.len().min(63)
     }
 }
 
@@ -1316,22 +1247,21 @@ impl<'a> KeyMatcher<'a> {
             [b'[', b']', b'.', ..] => return Some((IndexMatcher::Any, Some(KeyMatcher::new(&self.key[3..])))),
             [b'[', ..] => {
                 let tail = &bytes[1..];
-                if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit())
-                    && pos != 0
-                    && tail[pos] == b']'
-                    && (pos >= tail.len() - 1 || tail[pos + 1] == b'.')
-                    && let Ok(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse()
-                {
-                    let idx = IndexMatcher::Exact(idx);
-                    if pos >= tail.len() - 1 {
-                        return Some((idx, None));
-                    } else {
-                        return Some((
-                            idx,
-                            Some(KeyMatcher::new(unsafe {
-                                std::str::from_utf8_unchecked(&tail[pos + 2..])
-                            })),
-                        ));
+                if let Some(pos) = tail.iter().position(|c| !c.is_ascii_digit()) {
+                    if pos != 0 && tail[pos] == b']' && (pos >= tail.len() - 1 || tail[pos + 1] == b'.') {
+                        if let Ok(idx) = unsafe { std::str::from_utf8_unchecked(&tail[..pos]) }.parse() {
+                            let idx = IndexMatcher::Exact(idx);
+                            if pos >= tail.len() - 1 {
+                                return Some((idx, None));
+                            } else {
+                                return Some((
+                                    idx,
+                                    Some(KeyMatcher::new(unsafe {
+                                        std::str::from_utf8_unchecked(&tail[pos + 2..])
+                                    })),
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -1786,18 +1716,18 @@ impl Filter {
 
 impl RecordFilter for Filter {
     fn apply<'a>(&self, record: &Record<'a>) -> bool {
-        if (self.since.is_some() || self.until.is_some())
-            && let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse())
-        {
-            if let Some(since) = self.since
-                && ts < since
-            {
-                return false;
-            }
-            if let Some(until) = self.until
-                && ts > until
-            {
-                return false;
+        if self.since.is_some() || self.until.is_some() {
+            if let Some(ts) = record.ts.as_ref().and_then(|ts| ts.parse()) {
+                if let Some(since) = self.since {
+                    if ts < since {
+                        return false;
+                    }
+                }
+                if let Some(until) = self.until {
+                    if ts > until {
+                        return false;
+                    }
+                }
             }
         }
 

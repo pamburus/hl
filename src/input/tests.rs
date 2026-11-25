@@ -10,55 +10,6 @@ use crate::{
     vfs::{self, LocalFileSystem},
 };
 
-fn temp_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("hl-input-{}-{}", std::process::id(), name))
-}
-
-struct FailingReader;
-
-impl Read for FailingReader {
-    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::other("read error"))
-    }
-}
-
-impl Seek for FailingReader {
-    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
-        match from {
-            SeekFrom::Start(0) => Ok(0),
-            SeekFrom::Current(0) => Ok(0),
-            SeekFrom::End(0) => Ok(0),
-            _ => Err(io::Error::other("seek error")),
-        }
-    }
-}
-
-impl Meta for FailingReader {
-    fn metadata(&self) -> std::io::Result<Option<Metadata>> {
-        Ok(None)
-    }
-}
-
-struct UnseekableReader<R>(R);
-
-impl<R: Read> Read for UnseekableReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
-    }
-}
-
-impl<R> Seek for UnseekableReader<R> {
-    fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
-        Err(io::Error::other("seek error"))
-    }
-}
-
-impl<R> Meta for UnseekableReader<R> {
-    fn metadata(&self) -> io::Result<Option<Metadata>> {
-        Ok(None)
-    }
-}
-
 #[test]
 fn test_input_reference() {
     let reference = InputReference::Stdin;
@@ -119,23 +70,6 @@ fn test_input_tail() {
         assert!(n > 0);
         assert_eq!(buf.lines().count(), expected);
     }
-}
-
-#[test]
-fn test_input_position() {
-    // A file seeked to its tail is read from the tail, a sequential stream from its start.
-    let mut input = Input::open(&PathBuf::from("sample/test.log")).unwrap();
-    assert_eq!(input.position().unwrap(), 0);
-    let size = std::fs::metadata("sample/test.log").unwrap().len();
-    let mut input = input.tail(1, Delimiter::Newline).unwrap();
-    let position = input.position().unwrap();
-    let mut buf = Vec::new();
-    let n = input.stream.into_sequential().read_to_end(&mut buf).unwrap();
-    assert_eq!(position + n as u64, size);
-    assert!(position > 0);
-
-    let mut input = Input::stdin().unwrap();
-    assert_eq!(input.position().unwrap(), 0);
 }
 
 #[test]
@@ -313,6 +247,53 @@ fn test_indexed_input_sequential_access() {
 
 // ---
 
+struct FailingReader;
+
+impl Read for FailingReader {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::other("read error"))
+    }
+}
+
+impl Seek for FailingReader {
+    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
+        match from {
+            SeekFrom::Start(0) => Ok(0),
+            SeekFrom::Current(0) => Ok(0),
+            SeekFrom::End(0) => Ok(0),
+            _ => Err(io::Error::other("seek error")),
+        }
+    }
+}
+
+impl Meta for FailingReader {
+    fn metadata(&self) -> std::io::Result<Option<Metadata>> {
+        Ok(None)
+    }
+}
+
+// ---
+
+struct UnseekableReader<R>(R);
+
+impl<R: Read> Read for UnseekableReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl<R> Seek for UnseekableReader<R> {
+    fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
+        Err(io::Error::other("seek error"))
+    }
+}
+
+impl<R> Meta for UnseekableReader<R> {
+    fn metadata(&self) -> io::Result<Option<Metadata>> {
+        Ok(None)
+    }
+}
+
 #[test]
 fn test_failing_reader_seek_error() {
     use std::io::SeekFrom;
@@ -472,26 +453,6 @@ fn test_input_tail_partial_match_handling() {
 }
 
 #[test]
-fn test_input_tail_with_crlf_across_read_boundary() {
-    // The tail is read backwards in 64 KiB parts. The last part starts with the line feed of a
-    // CRLF whose carriage return ends the part before it, which has no other line break.
-    let mut data = b"line1\nline2\n".to_vec();
-    data.extend(std::iter::repeat_n(b'x', 64 * 1024));
-    data.extend(b"\r\n");
-    data.extend(std::iter::repeat_n(b'y', 64 * 1024 - 3));
-    data.extend(b"\r\n");
-
-    let stream = Stream::RandomAccess(Box::new(Cursor::new(data.clone())));
-    let input = Input::new(InputReference::Stdin, stream);
-
-    let input = input.tail(2, Delimiter::Newline).unwrap();
-    let mut buf = Vec::new();
-    input.stream.into_sequential().read_to_end(&mut buf).unwrap();
-
-    assert_eq!(buf, data[12..]);
-}
-
-#[test]
 fn test_input_tail_json_partial_match() {
     let mut data = Vec::new();
     for i in 0..100 {
@@ -614,42 +575,4 @@ fn test_block_entry_empty() {
     for block in blocks {
         let _entries = block.into_entries().unwrap().collect_vec();
     }
-}
-
-#[test]
-fn test_input_descriptor_from() {
-    let expected = |index, name: &str| InputDescriptor {
-        index,
-        name: name.into(),
-    };
-
-    assert_eq!(InputDescriptor::from((1, "a.log".to_owned())), expected(1, "a.log"));
-
-    let inputs = [
-        InputReference::File(InputPath::ephemeral("a.log".into())),
-        InputReference::Stdin,
-    ];
-    assert_eq!(
-        inputs.iter().enumerate().map(InputDescriptor::from).collect_vec(),
-        vec![expected(0, "a.log"), expected(1, "<stdin>")]
-    );
-}
-
-#[test]
-fn test_input_holder_metadata_describes_held_file_after_rotation() {
-    let path = temp_path("rotated");
-    let old = temp_path("rotated-old");
-    fs::write(&path, b"old line\n").unwrap();
-    let holder = InputReference::File(InputPath::resolve(path.clone()).unwrap())
-        .hold()
-        .unwrap();
-
-    fs::rename(&path, &old).unwrap();
-    fs::write(&path, b"new\n").unwrap();
-    let meta = holder.metadata();
-    drop(holder);
-    fs::remove_file(&path).unwrap();
-    fs::remove_file(&old).unwrap();
-
-    assert_eq!(meta.unwrap().map(|x| x.len()), Some(9));
 }

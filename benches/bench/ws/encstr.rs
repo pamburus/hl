@@ -7,8 +7,8 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 use json::de::{Read, StrRead};
 
 // local imports
-use super::{BencherExt, ND, hash, reference, samples};
-use encstr::{AnyEncodedString, Builder, Handler, Ignorer, JsonAppender, json::JsonEncodedString, raw::RawString};
+use super::{BencherExt, ND, hash, samples};
+use encstr::{AnyEncodedString, Builder, Handler, Ignorer, json::JsonEncodedString, raw::RawString};
 
 criterion_group!(benches, bench);
 
@@ -43,7 +43,7 @@ fn bench_with<I: InputConstruct>(
     group.measurement_time(Duration::from_secs(5));
     group.throughput(Throughput::Bytes(input.len() as u64));
 
-    if title == "json" && reference() {
+    if title == "json" {
         group.bench_function(BenchmarkId::new("serde-json:parse-str", &param), |b| {
             let setup = || String::from(input);
             b.iter_batched_ref_fixed(
@@ -100,18 +100,6 @@ fn bench_with<I: InputConstruct>(
             |(buf, input)| {
                 let input = black_box(constructor.new_input(input));
                 input.decode(buf).unwrap()
-            },
-            batch,
-        );
-    });
-
-    group.bench_function(BenchmarkId::new("decode:append-json", &param), |b| {
-        let setup = || (Vec::with_capacity(4096), String::from(input));
-        b.iter_batched_ref_fixed(
-            setup,
-            |(buf, input)| {
-                let input = black_box(constructor.new_input(input));
-                input.decode(JsonAppender::new(buf)).unwrap()
             },
             batch,
         );

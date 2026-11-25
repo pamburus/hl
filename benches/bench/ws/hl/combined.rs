@@ -9,10 +9,9 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 // local imports
 use super::{BencherExt, ND, hash, samples};
 use hl::{
-    DateTimeFormatter, Filter, LinuxDateFormat, Origin, Parser, ParserSettings, SegmentProcessor, Settings, Theme,
+    DateTimeFormatter, Filter, LinuxDateFormat, Parser, ParserSettings, SegmentProcessor, Settings, Theme,
     app::{RecordIgnorer, SegmentProcess, SegmentProcessorOptions},
     formatting::{NoOpRecordWithSourceFormatter, RecordFormatterBuilder},
-    input::InputDescriptor,
     settings::{self, ExpansionMode},
     timezone::Tz,
 };
@@ -43,7 +42,6 @@ pub(super) fn bench(c: &mut Criterion) {
         let settings = Settings::default();
         let parser = Parser::new(ParserSettings::new(&settings.fields.predefined, empty(), None));
         let filter = Filter::default();
-        let descriptor = InputDescriptor::new(0, "<stdin>");
         let formatter = RecordFormatterBuilder::new()
             .with_theme(Arc::new(Theme::embedded(THEME).unwrap()))
             .with_timestamp_formatter(DateTimeFormatter::new(
@@ -61,14 +59,7 @@ pub(super) fn bench(c: &mut Criterion) {
             b.iter_batched_ref_fixed(
                 setup,
                 |buf| {
-                    processor.process(
-                        input,
-                        buf,
-                        Origin::new(&descriptor, 0, input.len()),
-                        "",
-                        None,
-                        &mut RecordIgnorer {},
-                    );
+                    processor.process(input, buf, "", None, &mut RecordIgnorer {});
                 },
                 BatchSize::SmallInput,
             );
@@ -82,14 +73,7 @@ pub(super) fn bench(c: &mut Criterion) {
             b.iter_batched_ref_fixed(
                 setup,
                 |buf| {
-                    processor.process(
-                        input,
-                        buf,
-                        Origin::new(&descriptor, 0, input.len()),
-                        "",
-                        None,
-                        &mut RecordIgnorer {},
-                    );
+                    processor.process(input, buf, "", None, &mut RecordIgnorer {});
                 },
                 BatchSize::SmallInput,
             );

@@ -7,12 +7,12 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 // third-party imports
+use crossbeam_queue::SegQueue;
 use memchr::{memchr, memrchr};
 use serde::{Deserialize, Serialize};
 
 // local imports
 use crate::error::*;
-use crate::pool::{Pool, Pooled, Recycler};
 
 // ---
 
@@ -262,17 +262,6 @@ pub trait Search {
     #[must_use]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
 
-    /// Searches for the delimiter in the buffer from the right, like [`Search::search_r`] with `edge`,
-    /// in a buffer that only grows at its end between searches.
-    ///
-    /// The first search of a buffer starts from [`SearchProgress::default`]. A search that finds no delimiter
-    /// updates `progress` with what the next search of the grown buffer needs to know, so that only
-    /// the delimiters that the grown data can complete are looked for, and searching a growing buffer
-    /// each time it grows costs no more than its length in total. After a delimiter is found, or the
-    /// buffer changes before its end, the next search starts from [`SearchProgress::default`] again.
-    #[must_use]
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>>;
-
     /// Searches for the delimiter in the buffer from the left.
     #[must_use]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>>;
@@ -303,46 +292,10 @@ pub trait Search {
     fn partial_match_l(&self, buf: &[u8]) -> Option<usize>;
 }
 
-/// What a search of a growing buffer that found no delimiter knows for the next search,
-/// see [`Search::search_r_incremental`].
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct SearchProgress {
-    // `buf[..len]` has been searched.
-    len: usize,
-    // What the searcher keeps for the next search, which for most of them is where it starts,
-    // as a delimiter can only be completed with the data at `from` or later. The JSON searcher
-    // starts at `len` instead and keeps here a closing brace it has yet to resolve, if `from < len`.
-    from: usize,
-}
-
-impl SearchProgress {
-    /// Returns where the searched data ends.
-    #[inline]
-    pub fn end(&self) -> usize {
-        self.len
-    }
-
-    /// Returns what the next search of `buf` needs to know when a delimiter can only be completed with the data at `from` or later.
-    #[inline]
-    fn up_to(buf: &[u8], from: usize) -> Self {
-        Self { len: buf.len(), from }
-    }
-}
-
 impl Search for u8 {
     #[inline(always)]
     fn search_r(&self, buf: &[u8], _: bool) -> Option<Range<usize>> {
         memrchr(*self, buf).map(|x| x..x + 1)
-    }
-
-    #[inline(always)]
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        let from = progress.from;
-        let found = memrchr(*self, &buf[from..]).map(|x| from + x..from + x + 1);
-        if found.is_none() {
-            *progress = SearchProgress::up_to(buf, buf.len());
-        }
-        found
     }
 
     #[inline(always)]
@@ -368,11 +321,6 @@ impl Search for Box<dyn Search> {
     }
 
     #[inline(always)]
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        self.as_ref().search_r_incremental(buf, progress)
-    }
-
-    #[inline(always)]
     fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_l(buf, edge)
     }
@@ -392,11 +340,6 @@ impl Search for Arc<dyn Search> {
     #[inline(always)]
     fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         self.as_ref().search_r(buf, edge)
-    }
-
-    #[inline(always)]
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        self.as_ref().search_r_incremental(buf, progress)
     }
 
     #[inline(always)]
@@ -483,28 +426,6 @@ where
     fn len(&self) -> usize {
         self.delimiter.deref().as_ref().len()
     }
-
-    /// Searches for the last delimiter in the buffer that starts at `from` or later.
-    #[inline]
-    fn search_r_from(&self, buf: &[u8], from: usize) -> Option<Range<usize>> {
-        let needle = self.delimiter.deref().as_ref();
-        if needle.is_empty() {
-            return None;
-        }
-
-        let b = needle[0];
-        let mut pos = buf.len();
-        loop {
-            if let Some(i) = memrchr(b, &buf[from..pos]) {
-                pos = from + i;
-            } else {
-                return None;
-            }
-            if buf[pos..].starts_with(needle) {
-                return Some(pos..pos + needle.len());
-            }
-        }
-    }
 }
 
 impl<D> Search for SubStrSearcher<D>
@@ -514,17 +435,23 @@ where
 {
     #[inline]
     fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        self.search_r_from(buf, 0)
-    }
-
-    #[inline]
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        let found = self.search_r_from(buf, progress.from);
-        if found.is_none() {
-            // A delimiter that fits in the searched data would have been found there.
-            *progress = SearchProgress::up_to(buf, (buf.len() + 1).saturating_sub(self.len()).min(buf.len()));
+        let needle = self.delimiter.deref().as_ref();
+        if needle.is_empty() {
+            return None;
         }
-        found
+
+        let b = needle[0];
+        let mut pos = buf.len();
+        loop {
+            if let Some(i) = memrchr(b, &buf[..pos]) {
+                pos = i;
+            } else {
+                return None;
+            }
+            if buf[pos..].starts_with(needle) {
+                return Some(pos..pos + needle.len());
+            }
+        }
     }
 
     #[inline]
@@ -579,35 +506,16 @@ where
 /// Searches for a new line in a byte slice that can be either LF or CRLF.
 pub struct NewlineSearcher;
 
-impl NewlineSearcher {
-    /// Searches for the last new line in the buffer with its line feed at `from` or later.
+impl Search for NewlineSearcher {
     #[inline]
-    fn search_r_from(buf: &[u8], from: usize) -> Option<Range<usize>> {
-        memrchr(b'\n', &buf[from..]).map(|i| {
-            let i = from + i;
+    fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
+        memrchr(b'\n', buf).map(|i| {
             if i > 0 && buf[i - 1] == b'\r' {
                 i - 1..i + 1
             } else {
                 i..i + 1
             }
         })
-    }
-}
-
-impl Search for NewlineSearcher {
-    #[inline]
-    fn search_r(&self, buf: &[u8], _edge: bool) -> Option<Range<usize>> {
-        Self::search_r_from(buf, 0)
-    }
-
-    #[inline]
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        let found = Self::search_r_from(buf, progress.from);
-        if found.is_none() {
-            // A line feed in the searched data would have been found there.
-            *progress = SearchProgress::up_to(buf, buf.len());
-        }
-        found
     }
 
     #[inline]
@@ -650,10 +558,9 @@ impl Search for NewlineSearcher {
 // ---
 
 /// Contains a pre-allocated data buffer for a Segment and data size.
-///
-/// A buffer taken from a [`SegmentBufFactory`] returns to it when dropped.
+#[derive(Eq)]
 pub struct SegmentBuf {
-    buf: Pooled<SegmentBufRecycler>,
+    buf: Vec<u8>,
     size: usize,
 }
 
@@ -670,50 +577,36 @@ impl SegmentBuf {
         self.size
     }
 
-    /// Returns the size of the buffer, which the data may not fill.
+    /// Transforms the SegmentBuf into inner Vec<u8>.
     #[inline]
-    pub fn capacity(&self) -> usize {
-        self.buf.len()
+    pub fn into_inner(self) -> Vec<u8> {
+        self.buf
     }
 
-    /// Shortens the data to the given length, keeping the buffer.
-    /// Has no effect if the data is already shorter.
     #[inline]
-    pub fn truncate(&mut self, len: usize) {
-        self.size = self.size.min(len);
-    }
-
-    /// Appends the given data, growing the buffer only if it does not fit.
-    #[inline]
-    pub fn extend_from_slice(&mut self, data: &[u8]) {
-        let end = self.size + data.len();
-        if end > self.buf.len() {
-            // Growing it by the default amortized policy could double the buffer for a few bytes.
-            // The length is read first, as two-phase borrows do not reach through `DerefMut`.
-            let additional = end - self.buf.len();
-            self.buf.reserve_exact(additional);
-            self.buf.resize(end, 0);
-        }
-        self.buf[self.size..end].copy_from_slice(data);
-        self.size = end;
-    }
-
-    /// Transforms the SegmentBuf into inner Vec<u8> holding only the data.
-    /// The buffer no longer returns to its pool.
-    #[inline]
-    pub fn into_data(self) -> Vec<u8> {
-        let size = self.size;
-        let mut buf = self.buf.into_inner();
-        buf.truncate(size);
-        buf
+    fn new(capacity: usize) -> Self {
+        let buf = vec![0; capacity];
+        Self { buf, size: 0 }
     }
 
     #[inline]
     fn zero() -> Self {
         Self {
-            buf: Pooled::detached(Vec::new()),
+            buf: Vec::new(),
             size: 0,
         }
+    }
+
+    #[inline]
+    fn reset(&mut self) {
+        self.buf.resize(self.buf.capacity(), 0);
+        self.size = 0;
+    }
+
+    #[inline]
+    fn resetted(mut self) -> Self {
+        self.reset();
+        self
     }
 
     #[inline]
@@ -722,8 +615,6 @@ impl SegmentBuf {
         other
     }
 }
-
-impl Eq for SegmentBuf {}
 
 impl PartialEq for SegmentBuf {
     #[inline]
@@ -742,31 +633,14 @@ impl std::fmt::Debug for SegmentBuf {
     }
 }
 
-impl From<Vec<u8>> for SegmentBuf {
-    /// Returns a SegmentBuf holding the given data without copying it, in a buffer that does not belong to any pool.
+impl<T: AsRef<[u8]>> From<T> for SegmentBuf {
     #[inline]
-    fn from(data: Vec<u8>) -> Self {
-        let size = data.len();
+    fn from(data: T) -> Self {
+        let size = data.as_ref().len();
         Self {
-            buf: Pooled::detached(data),
+            buf: data.as_ref().into(),
             size,
         }
-    }
-}
-
-impl From<&[u8]> for SegmentBuf {
-    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
-    #[inline]
-    fn from(data: &[u8]) -> Self {
-        data.to_vec().into()
-    }
-}
-
-impl<const N: usize> From<&[u8; N]> for SegmentBuf {
-    /// Returns a SegmentBuf holding a copy of the given data, in a buffer that does not belong to any pool.
-    #[inline]
-    fn from(data: &[u8; N]) -> Self {
-        data.as_slice().into()
     }
 }
 
@@ -778,25 +652,15 @@ impl<const N: usize> From<&[u8; N]> for SegmentBuf {
 #[derive(Debug, Eq, PartialEq)]
 pub enum Segment {
     Complete(SegmentBuf),
-    /// Also holds the length of the delimiter the part ends with, zero unless it is the last part,
-    /// and for the last part if the input ended without one.
-    Incomplete(SegmentBuf, PartialPlacement, usize),
+    Incomplete(SegmentBuf, PartialPlacement),
 }
 
 impl Segment {
-    /// Returns the data of the segment, whether it is complete or not.
-    #[inline]
-    pub fn data(&self) -> &[u8] {
-        match self {
-            Self::Complete(buf) | Self::Incomplete(buf, ..) => buf.data(),
-        }
-    }
-
     /// Returns a new Segment containing the given SegmentBuf.
     #[inline]
-    fn new(buf: SegmentBuf, placement: Option<PartialPlacement>, delimiter: usize) -> Self {
+    fn new(buf: SegmentBuf, placement: Option<PartialPlacement>) -> Self {
         if let Some(placement) = placement {
-            Self::Incomplete(buf, placement, delimiter)
+            Self::Incomplete(buf, placement)
         } else {
             Self::Complete(buf)
         }
@@ -815,49 +679,73 @@ pub enum PartialPlacement {
 
 // ---
 
-/// Constructs new SegmentBuf's with the configured size and takes back the ones dropped, see [`SegmentBufRecycler`].
-pub type SegmentBufFactory = Pool<SegmentBufRecycler>;
+/// Constructs new SegmentBuf's with the configures size and recycles unneeded SegmentBuf's.
+pub struct SegmentBufFactory {
+    buf_size: usize,
+    recycled: SegQueue<SegmentBuf>,
+}
 
 impl SegmentBufFactory {
     /// Returns a new SegmentBufFactory with the given parameters.
-    #[inline]
     pub fn new(buf_size: usize) -> Self {
-        Self::with_recycler(SegmentBufRecycler { buf_size })
+        Self {
+            buf_size,
+            recycled: SegQueue::new(),
+        }
     }
 
-    /// Returns a new or recycled SegmentBuf, which returns to the factory when dropped.
+    /// Returns a new or recycled SegmentBuf.
     #[inline]
-    pub fn new_segment(self: &Arc<Self>) -> SegmentBuf {
-        SegmentBuf {
-            buf: self.take(),
-            size: 0,
+    pub fn new_segment(&self) -> SegmentBuf {
+        match self.recycled.pop() {
+            Some(buf) => buf.resetted(),
+            None => SegmentBuf::new(self.buf_size),
+        }
+    }
+
+    /// Recycles the given SegmentBuf.
+    #[inline]
+    pub fn recycle(&self, buf: SegmentBuf) {
+        if buf.buf.capacity() == self.buf_size {
+            self.recycled.push(buf);
         }
     }
 }
 
-/// Creates the buffers of a [`SegmentBufFactory`] and decides which returned ones it keeps.
-///
-/// Only buffers of exactly the configured size are kept, as the scanner reads into the whole buffer.
-pub struct SegmentBufRecycler {
+// ---
+
+/// Constructs new raw Vec<u8> buffers with the configured size.
+pub struct BufFactory {
     buf_size: usize,
+    recycled: SegQueue<Vec<u8>>,
 }
 
-impl Recycler for SegmentBufRecycler {
-    type Item = Vec<u8>;
-
+impl BufFactory {
+    /// Returns a new BufFactory with the given parameters.
     #[inline]
-    fn create(&self) -> Vec<u8> {
-        vec![0; self.buf_size]
+    pub fn new(buf_size: usize) -> Self {
+        Self {
+            buf_size,
+            recycled: SegQueue::new(),
+        }
     }
 
+    /// Returns a new or recycled buffer.
     #[inline]
-    fn reuse(&self, buf: &mut Vec<u8>) {
-        buf.resize(buf.capacity(), 0);
+    pub fn new_buf(&self) -> Vec<u8> {
+        match self.recycled.pop() {
+            Some(mut buf) => {
+                buf.clear();
+                buf
+            }
+            None => Vec::with_capacity(self.buf_size),
+        }
     }
 
+    /// Recycles the given buffer.
     #[inline]
-    fn keep(&self, buf: &Vec<u8>) -> bool {
-        buf.capacity() == self.buf_size
+    pub fn recycle(&self, buf: Vec<u8>) {
+        self.recycled.push(buf);
     }
 }
 
@@ -870,33 +758,13 @@ pub struct ScannerIter<'a, 'b, D: Delimit> {
     next: SegmentBuf,
     searcher: D::Searcher,
     placement: Option<PartialPlacement>,
-    pending: bool,
     done: bool,
-    open_ended: bool,
 }
 
 impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
     #[inline]
     pub fn with_max_segment_size(self, max_segment_size: usize) -> ScannerJumboIter<'a, 'b, D> {
         ScannerJumboIter::new(self, max_segment_size)
-    }
-
-    /// Continues a token that a previous input left incomplete, see [`ScannerIter::open_ended`]:
-    /// the data up to the first delimiter is its rest, and none of its parts is marked as the first one.
-    #[inline]
-    pub fn continuing(mut self, continuing: bool) -> Self {
-        if continuing {
-            self.placement = Some(PartialPlacement::Next);
-        }
-        self
-    }
-
-    /// Leaves a token split into parts that is incomplete at the end of the input open, to be continued by another input,
-    /// instead of marking its last part as [`PartialPlacement::Last`].
-    #[inline]
-    pub fn open_ended(mut self, open_ended: bool) -> Self {
-        self.open_ended = open_ended;
-        self
     }
 
     #[inline]
@@ -907,38 +775,29 @@ impl<'a, 'b, D: Delimit> ScannerIter<'a, 'b, D> {
             next: scanner.sf.new_segment(),
             searcher: scanner.delimiter.clone().into_searcher(),
             placement: None,
-            pending: false,
             done: false,
-            open_ended: false,
         }
     }
 
-    /// Splits off the data after the last token, or after an incomplete token,
-    /// returning it along with the length of the delimiter it was split at, if any.
     #[inline]
-    fn split(&mut self, full: bool, edge: bool) -> Option<(SegmentBuf, Option<usize>)> {
+    fn split(&mut self, full: bool, edge: bool) -> Option<(SegmentBuf, bool)> {
         if self.next.len() < 1 {
             return None;
         }
 
         let buf = self.next.data();
         let bs = buf.len();
-        // An incomplete token ends at the first delimiter, and the tokens after it start a new segment.
-        let found = if self.placement.is_some() {
-            self.searcher.search_l(buf, true)
-        } else {
-            self.searcher.search_r(buf, edge)
-        };
-        found
-            .map(|range| (range.end, Some(range.len())))
+        self.searcher
+            .search_r(buf, edge)
+            .map(|range| (range.end, true))
             .or_else(|| {
                 if full {
-                    self.searcher.partial_match_r(buf).map(|n| (n, None))
+                    self.searcher.partial_match_r(buf).map(|n| (n, false))
                 } else {
                     None
                 }
             })
-            .and_then(|(n, delimiter)| self.split_n(bs - n).map(|sb| (sb, delimiter)))
+            .and_then(|(n, ok)| self.split_n(bs - n).map(|sb| (sb, ok)))
     }
 
     #[inline]
@@ -972,44 +831,33 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
         loop {
             let begin = self.next.size;
             let end = bs;
-            // Tokens left after an incomplete token are split before reading more input.
-            let n = if std::mem::take(&mut self.pending) {
-                None
-            } else {
-                match self.input.read(&mut self.next.buf[begin..end]) {
-                    Ok(n) => Some(n),
-                    Err(err) => {
-                        self.done = true;
-                        return Some(Err(err.into()));
-                    }
+            let n = match self.input.read(&mut self.next.buf[begin..end]) {
+                Ok(n) => n,
+                Err(err) => {
+                    self.done = true;
+                    return Some(Err(err.into()));
                 }
             };
 
-            self.next.size += n.unwrap_or(0);
+            self.next.size += n;
             let full = self.next.size == end;
 
-            let (next, placement, delimiter) = if n == Some(0) {
+            let (next, placement) = if n == 0 {
                 self.done = true;
-                let end = if self.open_ended {
-                    PartialPlacement::Next
-                } else {
-                    PartialPlacement::Last
-                };
-                (SegmentBuf::zero(), self.placement.take().and(Some(end)), 0)
+                (SegmentBuf::zero(), self.placement.and(Some(PartialPlacement::Last)))
             } else {
                 match self.split(full, self.done) {
-                    Some((next, Some(delimiter))) => {
-                        self.pending = self.placement.is_some() && next.len() != 0;
-                        let result = (next, self.placement.and(Some(PartialPlacement::Last)), delimiter);
+                    Some((next, true)) => {
+                        let result = (next, self.placement.and(Some(PartialPlacement::Last)));
                         self.placement = None;
                         result
                     }
-                    Some((next, None)) => {
+                    Some((next, false)) => {
                         self.placement = self
                             .placement
                             .and(Some(PartialPlacement::Next))
                             .or(Some(PartialPlacement::First));
-                        (next, self.placement, 0)
+                        (next, self.placement)
                     }
                     None => {
                         if !full {
@@ -1019,15 +867,14 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
                             .placement
                             .and(Some(PartialPlacement::Next))
                             .or(Some(PartialPlacement::First));
-                        (self.scanner.sf.new_segment(), self.placement, 0)
+                        (self.scanner.sf.new_segment(), self.placement)
                     }
                 }
             };
 
             let result = self.next.replace(next);
-            // A token split into parts always ends with its last part, empty if the input ended right after a whole part.
-            return if result.size != 0 || placement == Some(PartialPlacement::Last) {
-                Some(Ok(Segment::new(result, placement, delimiter)))
+            return if result.size != 0 {
+                Some(Ok(Segment::new(result, placement)))
             } else {
                 None
             };
@@ -1043,7 +890,7 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerIter<'a, 'b, D> {
 pub struct ScannerJumboIter<'a, 'b, D: Delimit> {
     inner: ScannerIter<'a, 'b, D>,
     max_segment_size: usize,
-    fetched: VecDeque<(SegmentBuf, PartialPlacement, usize)>,
+    fetched: VecDeque<(SegmentBuf, PartialPlacement)>,
     next: Option<Result<Segment>>,
 }
 
@@ -1059,12 +906,12 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
     }
 
     #[inline]
-    fn push(&mut self, buf: SegmentBuf, placement: PartialPlacement, delimiter: usize) {
-        self.fetched.push_back((buf, placement, delimiter));
+    fn push(&mut self, buf: SegmentBuf, placement: PartialPlacement) {
+        self.fetched.push_back((buf, placement));
     }
 
     #[inline]
-    fn pop(&mut self) -> Option<(SegmentBuf, PartialPlacement, usize)> {
+    fn pop(&mut self) -> Option<(SegmentBuf, PartialPlacement)> {
         self.fetched.pop_front()
     }
 
@@ -1077,17 +924,17 @@ impl<'a, 'b, D: Delimit> ScannerJumboIter<'a, 'b, D> {
 
     #[inline]
     fn complete(&mut self) -> Option<Result<Segment>> {
-        // One allocation of the exact size, filled part by part.
-        let total = self.fetched.iter().map(|(buf, ..)| buf.len()).sum();
-        let mut buf = Vec::with_capacity(total);
-        for (part, ..) in &self.fetched {
-            buf.extend_from_slice(part.data());
+        let buf = self
+            .fetched
+            .iter()
+            .flat_map(|(buf, _)| buf.data())
+            .cloned()
+            .collect::<Vec<u8>>();
+        for (buf, _) in self.fetched.drain(..) {
+            self.inner.scanner.sf.recycle(buf);
         }
-        // The parts return to their pool.
-        self.fetched.clear();
 
-        // From<Vec<u8>> moves the joined Vec in, without another copy.
-        Some(Ok(Segment::Complete(SegmentBuf::from(buf))))
+        Some(Ok(Segment::Complete(buf.into())))
     }
 }
 
@@ -1096,8 +943,8 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some((buf, placement, delimiter)) = self.pop() {
-                return Some(Ok(Segment::Incomplete(buf, placement, delimiter)));
+            if let Some((buf, placement)) = self.pop() {
+                return Some(Ok(Segment::Incomplete(buf, placement)));
             }
             if let Some(next) = self.next.take() {
                 return Some(next);
@@ -1108,9 +955,9 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
             loop {
                 let next = self.inner.next();
                 match next {
-                    Some(Ok(Segment::Incomplete(buf, placement, delimiter))) => {
+                    Some(Ok(Segment::Incomplete(buf, placement))) => {
                         total += buf.len();
-                        self.push(buf, placement, delimiter);
+                        self.push(buf, placement);
                         if self.can_complete() {
                             return self.complete();
                         }
@@ -1130,18 +977,6 @@ impl<'a, 'b, D: Delimit> Iterator for ScannerJumboIter<'a, 'b, D> {
                     }
                 };
                 if total >= self.max_segment_size {
-                    // A token exactly as large as the limit still fits if the input ends right after it.
-                    if total == self.max_segment_size {
-                        match self.inner.next() {
-                            Some(Ok(Segment::Incomplete(buf, PartialPlacement::Last, delimiter))) if buf.len() == 0 => {
-                                self.push(buf, PartialPlacement::Last, delimiter);
-                                if self.can_complete() {
-                                    return self.complete();
-                                }
-                            }
-                            next => self.next = next,
-                        }
-                    }
                     break;
                 }
             }

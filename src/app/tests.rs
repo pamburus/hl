@@ -2,26 +2,20 @@
 use super::*;
 
 // std imports
-use std::{
-    alloc::{GlobalAlloc, Layout, System},
-    io::Cursor,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::io::Cursor;
 
 // third-party imports
-use chrono::{Offset, TimeZone, Utc};
+use chrono::{Offset, Utc};
 use chrono_tz::UTC;
 use maplit::hashmap;
-use rstest::rstest;
 
 // local imports
 use crate::{
     LinuxDateFormat,
     filtering::MatchOptions,
     level::{InfallibleLevel, Level},
-    model::{FieldFilterSet, RecordWithSource},
-    output::{BufFactory, OutputBuf},
-    scanning::{NewlineSearcher, PartialPlacement, SearchProgress, Segment, SegmentBuf, SegmentBufFactory},
+    model::FieldFilterSet,
+    scanning::{BufFactory, PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
     settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
     syntax::*,
     themecfg,
@@ -29,335 +23,6 @@ use crate::{
 
 fn theme() -> Arc<Theme> {
     Sample::sample()
-}
-
-/// Size of the buffers counted by [`BufferCounter`], one no other test uses for its buffers.
-const COUNTED_BUFFER_SIZE: usize = 4099;
-
-/// Serializes the tests that count buffers, as they all count buffers of the same size.
-static BUFFER_COUNTING: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-/// Counts the allocations of [`COUNTED_BUFFER_SIZE`] bytes that are alive at once, and all of them,
-/// so a test can tell how many buffers of that size the app keeps or takes while other tests run.
-struct BufferCounter {
-    live: AtomicUsize,
-    peak: AtomicUsize,
-    total: AtomicUsize,
-}
-
-impl BufferCounter {
-    fn on_alloc(&self, size: usize) {
-        if size == COUNTED_BUFFER_SIZE {
-            self.total.fetch_add(1, Ordering::Relaxed);
-            let live = self.live.fetch_add(1, Ordering::Relaxed) + 1;
-            self.peak.fetch_max(live, Ordering::Relaxed);
-        }
-    }
-
-    fn on_dealloc(&self, size: usize) {
-        if size == COUNTED_BUFFER_SIZE {
-            self.live.fetch_sub(1, Ordering::Relaxed);
-        }
-    }
-
-    /// Starts counting the peak from the buffers alive now, and returns their number.
-    fn reset_peak(&self) -> usize {
-        let live = self.live.load(Ordering::Relaxed);
-        self.peak.store(live, Ordering::Relaxed);
-        live
-    }
-
-    fn peak(&self) -> usize {
-        self.peak.load(Ordering::Relaxed)
-    }
-
-    fn total(&self) -> usize {
-        self.total.load(Ordering::Relaxed)
-    }
-}
-
-unsafe impl GlobalAlloc for BufferCounter {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = unsafe { System.alloc(layout) };
-        if !ptr.is_null() {
-            self.on_alloc(layout.size());
-        }
-        ptr
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        let ptr = unsafe { System.alloc_zeroed(layout) };
-        if !ptr.is_null() {
-            self.on_alloc(layout.size());
-        }
-        ptr
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        let new_ptr = unsafe { System.realloc(ptr, layout, new_size) };
-        if !new_ptr.is_null() {
-            self.on_dealloc(layout.size());
-            self.on_alloc(new_size);
-        }
-        new_ptr
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) };
-        self.on_dealloc(layout.size());
-    }
-}
-
-// It is the allocator of the whole lib test binary, so it only adds a size check to other tests' allocations.
-#[global_allocator]
-static BUFFERS: BufferCounter = BufferCounter {
-    live: AtomicUsize::new(0),
-    peak: AtomicUsize::new(0),
-    total: AtomicUsize::new(0),
-};
-
-/// Holds written bytes until flushed and then sends them to a channel.
-struct FlushProbe {
-    pending: Vec<u8>,
-    flushed: channel::Sender<Vec<u8>>,
-}
-
-impl Write for FlushProbe {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.pending.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        if !self.pending.is_empty() {
-            self.flushed.send(std::mem::take(&mut self.pending)).ok();
-        }
-        Ok(())
-    }
-}
-
-fn input<S: Into<String>>(s: S) -> InputHolder {
-    InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
-}
-
-fn options() -> Options {
-    Options {
-        theme: Arc::new(Theme::none()),
-        time_format: LinuxDateFormat::new("%Y-%m-%d %T.%3N").compile(),
-        raw: false,
-        raw_fields: false,
-        allow_prefix: false,
-        buffer_size: NonZeroUsize::new(4096).unwrap(),
-        max_message_size: NonZeroUsize::new(4096 * 1024).unwrap(),
-        concurrency: 1,
-        filter: Default::default(),
-        fields: FieldOptions::default(),
-        formatting: Formatting {
-            message: MessageFormatting {
-                format: MessageFormat::AutoQuoted,
-            },
-            ..Formatting::default()
-        },
-        time_zone: Tz::IANA(UTC),
-        hide_empty_fields: false,
-        sort: false,
-        follow: false,
-        sync_interval: Duration::from_secs(1),
-        input_info: Default::default(),
-        input_format: None,
-        dump_index: false,
-        app_dirs: None,
-        tail: 0,
-        delimiter: Delimiter::default(),
-        unix_ts_unit: None,
-        flatten: false,
-        ascii: AsciiMode::Off,
-        expand: Default::default(),
-        output_delimiter: "\n".to_string(),
-    }
-}
-
-fn test_badges(width: usize) -> FollowBadges {
-    FollowBadges {
-        si: SyncIndicator {
-            width,
-            synced: "S".repeat(width),
-            failed: "F".repeat(width),
-            placeholder: " ".repeat(width),
-        },
-        input: None,
-    }
-}
-
-fn ts(sec: i64, nsec: u32) -> Timestamp {
-    Timestamp { sec, nsec }
-}
-
-/// A message from a follow mode worker to the merger.
-type Processed = (usize, OutputBuf, TimestampIndex);
-
-/// Returns a worker message for a block holding a single record with timestamp `sec`.
-fn record_block(input: usize, block: usize, text: &str, sec: i64) -> Processed {
-    let index = TimestampIndex {
-        block,
-        lines: vec![TimestampIndexLine {
-            location: 0..text.len(),
-            ts: ts(sec, 0),
-        }],
-        part: None,
-    };
-    (input, text.as_bytes().to_vec().into(), index)
-}
-
-/// Returns a worker message for a block holding a part of a log entry too large to be read at once.
-fn part_block(input: usize, block: usize, text: &str, part: PartialPlacement) -> Processed {
-    let index = TimestampIndex {
-        part: Some(part),
-        ..TimestampIndex::new(block)
-    };
-    (input, text.as_bytes().to_vec().into(), index)
-}
-
-/// Returns a worker message for a block holding text that is not a record.
-fn text_block(input: usize, block: usize, text: &str) -> Processed {
-    (input, text.as_bytes().to_vec().into(), TimestampIndex::new(block))
-}
-
-/// Merges `messages`, received one by one, in a window with room for all of them,
-/// and returns the output.
-fn merge(sync_interval: Duration, messages: Vec<Processed>) -> String {
-    let app = App::new(Options {
-        sync_interval,
-        ..options()
-    });
-    let (txo, rxo) = channel::unbounded();
-    for message in messages {
-        txo.send(message).unwrap();
-    }
-    drop(txo);
-
-    let mut output = Vec::new();
-    app.merge_segments(&test_badges(2), rxo, &mut output, 1).unwrap();
-    String::from_utf8(output).unwrap()
-}
-
-/// A new line delimiter that counts the bytes searched for it.
-#[derive(Clone, Default)]
-struct CountingNewline(Arc<AtomicUsize>);
-
-impl CountingNewline {
-    fn searched(&self) -> usize {
-        self.0.load(Ordering::Relaxed)
-    }
-
-    fn count(&self, buf: &[u8]) {
-        self.0.fetch_add(buf.len(), Ordering::Relaxed);
-    }
-}
-
-impl Delimit for CountingNewline {
-    type Searcher = Self;
-
-    fn into_searcher(self) -> Self {
-        self
-    }
-}
-
-impl Search for CountingNewline {
-    fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        self.count(buf);
-        NewlineSearcher.search_r(buf, edge)
-    }
-
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        self.count(&buf[progress.end()..]);
-        NewlineSearcher.search_r_incremental(buf, progress)
-    }
-
-    fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        self.count(buf);
-        NewlineSearcher.search_l(buf, edge)
-    }
-
-    fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
-        NewlineSearcher.partial_match_r(buf)
-    }
-
-    fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
-        NewlineSearcher.partial_match_l(buf)
-    }
-}
-
-/// Scans each chunk as a separate follow mode scan and returns the segments sent after each of them.
-fn scan_segments(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<Segment>> {
-    let sfi = Arc::new(SegmentBufFactory::new(segment_size));
-    let scanner = Scanner::new(sfi, Delimiter::default());
-    let (txi, rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), segment_size);
-
-    chunks
-        .iter()
-        .map(|&(chunk, hold_tail)| {
-            blocks
-                .scan(&mut Cursor::new(chunk.to_vec()), 0, &txi, hold_tail)
-                .unwrap();
-            rxi.try_iter().map(|(_, _, _, segment)| segment).collect_vec()
-        })
-        .collect()
-}
-
-/// Scans each chunk as a separate follow mode scan and returns the text of the
-/// segments sent after each of them.
-fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
-    let text = |segment: Segment| match segment {
-        Segment::Complete(buf) | Segment::Incomplete(buf, ..) => String::from_utf8_lossy(buf.data()).into_owned(),
-    };
-
-    scan_segments(segment_size, chunks)
-        .into_iter()
-        .map(|segments| segments.into_iter().map(text).collect())
-        .collect()
-}
-
-/// The input and byte range of a formatted record, as seen by the formatter.
-type CapturedOrigin = (InputDescriptor, Range<u64>);
-
-/// Records the origin of each formatted record and writes its source.
-#[derive(Default)]
-struct OriginCapture {
-    origins: std::sync::Mutex<Vec<CapturedOrigin>>,
-}
-
-impl RecordWithSourceFormatter for OriginCapture {
-    fn format_record(&self, buf: &mut Vec<u8>, _: Range<usize>, rec: RecordWithSource) {
-        buf.extend_from_slice(rec.source);
-        self.origins
-            .lock()
-            .unwrap()
-            .push((rec.origin.input.clone(), rec.origin.range));
-    }
-}
-
-fn app_with_origin_capture(options: Options) -> (App, Arc<OriginCapture>) {
-    let capture = Arc::new(OriginCapture::default());
-    let mut app = App::new(options);
-    app.formatter = capture.clone();
-    (app, capture)
-}
-
-fn file_input<S: Into<String>>(name: &str, s: S) -> InputHolder {
-    InputHolder::new(
-        InputReference::File(crate::input::InputPath::ephemeral(name.into())),
-        Some(Box::new(Cursor::new(s.into()))),
-    )
-}
-
-fn descriptor(index: usize, name: &str) -> InputDescriptor {
-    InputDescriptor::new(index, name)
-}
-
-fn descriptors(inputs: &[InputReference]) -> Vec<InputDescriptor> {
-    inputs.iter().enumerate().map(Into::into).collect_vec()
 }
 
 #[test]
@@ -512,46 +177,6 @@ fn test_sort_with_blank_lines() {
     );
 }
 
-#[rstest]
-#[case::until_before_block(None, None, Some((18, 9, 0)), "")]
-#[case::since_after_block(None, Some((18, 11, 0)), None, "")]
-#[case::level_above_block(Some(Level::Error), None, None, "")]
-#[case::block_kept(
-    Some(Level::Debug),
-    Some((18, 9, 0)),
-    Some((18, 11, 0)),
-    "2024-01-25 18:09:16.860 |DBG| m1\n2024-01-25 18:10:20.435 |DBG| m2\n"
-)]
-fn test_sort_with_filter_skipping_blocks(
-    #[case] level: Option<Level>,
-    #[case] since: Option<(u32, u32, u32)>,
-    #[case] until: Option<(u32, u32, u32)>,
-    #[case] expected: &str,
-) {
-    let input = input(concat!(
-        r#"{"level":"debug","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m2"}"#,
-        "\n",
-        r#"{"level":"debug","ts":"2024-01-25T19:09:16.860711+01:00","msg":"m1"}"#,
-        "\n",
-    ));
-    let time = |(h, m, s)| Utc.with_ymd_and_hms(2024, 1, 25, h, m, s).unwrap();
-
-    let mut output = Vec::new();
-    let app = App::new(
-        options().with_sort(true).with_filter(
-            Filter {
-                level,
-                since: since.map(time),
-                until: until.map(time),
-                ..Default::default()
-            }
-            .into(),
-        ),
-    );
-    app.run(vec![input], &mut output).unwrap();
-    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
-}
-
 #[test]
 fn test_filter_with_blank_lines() {
     let input = input(concat!(
@@ -576,33 +201,6 @@ fn test_filter_with_blank_lines() {
         std::str::from_utf8(&output).unwrap(),
         "2024-01-25 18:10:20.435 |DBG| m2\n",
     );
-}
-
-#[rstest]
-#[case::filtered_first(r#"{"level":"debug","msg":"m1"}{"level":"info","msg":"m2"}"#, "|INF| m2\n")]
-#[case::filtered_first_two(
-    r#"{"level":"debug","msg":"m1"}{"level":"debug","msg":"m2"}{"level":"info","msg":"m3"}"#,
-    "|INF| m3\n"
-)]
-#[case::filtered_last(r#"{"level":"info","msg":"m1"}{"level":"debug","msg":"m2"}"#, "|INF| m1\n")]
-#[case::filtered_middle(
-    r#"{"level":"info","msg":"m1"}{"level":"debug","msg":"m2"}{"level":"info","msg":"m3"}"#,
-    "|INF| m1\n|INF| m3\n"
-)]
-#[case::filtered_all(r#"{"level":"debug","msg":"m1"}{"level":"debug","msg":"m2"}"#, "")]
-fn test_filter_records_sharing_line(#[case] data: &str, #[case] expected: &str) {
-    let mut output = Vec::new();
-    let app = App::new(
-        options().with_filter(
-            Filter {
-                level: Some(Level::Info),
-                ..Default::default()
-            }
-            .into(),
-        ),
-    );
-    app.run(vec![input(format!("{data}\n"))], &mut output).unwrap();
-    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
 }
 
 #[test]
@@ -709,209 +307,6 @@ fn test_incomplete_segment() {
             "2024-01-25 18:10:21.764 |DBG| m2 x=2\n",
         )
     );
-}
-
-#[rstest]
-#[case::newline_to_nul(Delimiter::Newline, "\n", "\0")]
-#[case::cr_to_newline(Delimiter::Byte(b'\r'), "\r", "\n")]
-#[case::nul_to_newline(Delimiter::Byte(0), "\0", "\n")]
-#[case::line_break_and_nul_to_nul(Delimiter::Byte(0), "\n\0", "\0")]
-#[case::crlf_and_nul_to_nul(Delimiter::Byte(0), "\r\n\0", "\0")]
-#[case::json_line_break_to_nul(Delimiter::Json, "\n", "\0")]
-#[case::json_crlf_to_nul(Delimiter::Json, "\r\n", "\0")]
-fn test_unparsed_line_output_delimiter(
-    #[case] delimiter: Delimiter,
-    #[case] terminator: &str,
-    #[case] output_delimiter: &str,
-    #[values(10, 64)] len: usize,
-    #[values(false, true)] terminated: bool,
-    #[values(false, true)] follow: bool,
-) {
-    let line = "x".repeat(len);
-    let data = if terminated {
-        format!("{line}{terminator}")
-    } else {
-        line.clone()
-    };
-
-    let mut output = Vec::new();
-    let app = App::new(Options {
-        buffer_size: NonZeroUsize::new(32).unwrap(),
-        max_message_size: NonZeroUsize::new(32).unwrap(),
-        delimiter,
-        output_delimiter: output_delimiter.into(),
-        follow,
-        ..options()
-    });
-    app.run(vec![input(data)], &mut output).unwrap();
-    assert_eq!(
-        std::str::from_utf8(&output).unwrap(),
-        format!("{line}{output_delimiter}")
-    );
-}
-
-#[rstest]
-fn test_overlong_unparsed_line_before_json_object(
-    #[values("", "  ")] indent: &str,
-    #[values(false, true)] follow: bool,
-) {
-    // The delimiter before an object can only be told from text by what follows it.
-    // The line fills whole buffers, as a delimiter that ends a buffer after text is not found yet, see #1710.
-    let line = "x".repeat(64);
-    let data = format!("{line}\n{indent}{{\"msg\":\"m\"}}\n");
-
-    let mut output = Vec::new();
-    let app = App::new(Options {
-        buffer_size: NonZeroUsize::new(32).unwrap(),
-        max_message_size: NonZeroUsize::new(32).unwrap(),
-        delimiter: Delimiter::Json,
-        follow,
-        ..options()
-    });
-    app.run(vec![input(data)], &mut output).unwrap();
-    assert_eq!(std::str::from_utf8(&output).unwrap(), format!("{line}\nm\n"));
-}
-
-#[rstest]
-fn test_overlong_unterminated_line_before_next_input(
-    #[values(64, 70)] len: usize,
-    #[values(false, true)] follow: bool,
-) {
-    // The first input ends with a line longer than the maximum message size and no line break after it.
-    let line = "x".repeat(len);
-    let inputs = vec![input(line.clone()), input("y\n")];
-
-    let mut output = Vec::new();
-    let app = App::new(Options {
-        buffer_size: NonZeroUsize::new(32).unwrap(),
-        max_message_size: NonZeroUsize::new(32).unwrap(),
-        follow,
-        ..options()
-    });
-    app.run(inputs, &mut output).unwrap();
-    let output = std::str::from_utf8(&output).unwrap();
-    let mut lines = output.split_inclusive('\n').collect_vec();
-    assert_eq!(lines.len(), 2, "{output:?}");
-    if follow {
-        // The inputs are followed at once, so the lines can come in either order.
-        lines.sort();
-        assert_eq!(
-            lines,
-            [format!("#0 | <stdin> | {line}\n").as_str(), "#1 | <stdin> | y\n"]
-        );
-    } else {
-        // The overlong line has no input badge yet, see #1660.
-        assert_eq!(lines[0], format!("{line}\n"));
-        assert!(lines[1].ends_with(" y\n"), "{output:?}");
-    }
-}
-
-#[rstest]
-#[case::below_limit(128)]
-#[case::at_limit(64)]
-fn test_unterminated_record_filling_whole_buffers(#[case] max_message_size: usize) {
-    // The last record has no line break and is exactly two buffers long, so it is read in two whole parts.
-    let input = input("level=debug time=2024-01-25T19:10:21.764733+01:00 msg=m2 x=12345");
-
-    let mut output = Vec::new();
-    let app = App::new(Options {
-        buffer_size: NonZeroUsize::new(32).unwrap(),
-        max_message_size: NonZeroUsize::new(max_message_size).unwrap(),
-        ..options()
-    });
-    app.run(vec![input], &mut output).unwrap();
-    assert_eq!(
-        std::str::from_utf8(&output).unwrap(),
-        "2024-01-25 18:10:21.764 |DBG| m2 x=12345\n"
-    );
-}
-
-#[rstest]
-fn test_overlong_line_buffers_reused(#[values(false, true)] terminated: bool, #[values(1, 4)] concurrency: usize) {
-    // The line is shown part by part, so the number of buffers it takes at once should not grow with its length.
-    const PARTS: usize = 256;
-    let line = "x".repeat(COUNTED_BUFFER_SIZE * PARTS);
-    let expected = format!("a\n{line}\n");
-    let data = if terminated { format!("{line}\n") } else { line };
-    let data = format!("{{\"msg\":\"a\"}}\n{data}");
-
-    let app = App::new(Options {
-        buffer_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE).unwrap(),
-        max_message_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE * 4).unwrap(),
-        concurrency,
-        ..options()
-    });
-    let input = input(data);
-    // Reserved in advance, so the output does not grow into a buffer of the counted size.
-    let mut output = Vec::with_capacity(expected.len());
-    let _guard = BUFFER_COUNTING.lock().unwrap_or_else(|e| e.into_inner());
-    let baseline = BUFFERS.reset_peak();
-    app.run(vec![input], &mut output).unwrap();
-    let peak = BUFFERS.peak() - baseline;
-    assert!(peak < 32, "{peak} buffers alive at once for a line of {PARTS} parts");
-    assert!(
-        output == expected.as_bytes(),
-        "unexpected output of {} bytes",
-        output.len()
-    );
-}
-
-#[rstest]
-fn test_output_buffers_reused(#[values(1, 4)] concurrency: usize) {
-    // Every line fills a whole buffer and is shown as is, so a new buffer for each of them would show in the count.
-    const LINES: usize = 256;
-    let line = format!("{}\n", "x".repeat(COUNTED_BUFFER_SIZE - 1));
-    let data = line.repeat(LINES);
-
-    let app = App::new(Options {
-        buffer_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE).unwrap(),
-        max_message_size: NonZeroUsize::new(COUNTED_BUFFER_SIZE * 4).unwrap(),
-        concurrency,
-        ..options()
-    });
-    let input = input(data.clone());
-    // Reserved in advance, so the output does not grow into a buffer of the counted size.
-    let mut output = Vec::with_capacity(data.len());
-    let _guard = BUFFER_COUNTING.lock().unwrap_or_else(|e| e.into_inner());
-    let before = BUFFERS.total();
-    app.run(vec![input], &mut output).unwrap();
-    let taken = BUFFERS.total() - before;
-    assert!(taken < 32, "{taken} buffers taken for {LINES} lines");
-    assert!(output == data.as_bytes(), "unexpected output of {} bytes", output.len());
-}
-
-#[rstest]
-#[case::filter(
-    options().with_filter(Filter { level: Some(Level::Error), ..Default::default() }.into()),
-    "2024-01-25 18:10:20.435 |ERR| m1\n"
-)]
-#[case::input_format(
-    Options { input_format: Some(InputFormat::Json), delimiter: Delimiter::Json, ..options() },
-    "2024-01-25 18:10:20.435 |ERR| m1\n2024-01-25 18:10:21.764 |INF| m2\n"
-)]
-fn test_incomplete_segment_hidden(#[case] opts: Options, #[case] expected: &str, #[values(false, true)] follow: bool) {
-    let input = input(format!(
-        concat!(
-            r#"{{"level":"error","ts":"2024-01-25T19:10:20.435369+01:00","msg":"m1"}}"#,
-            "\n",
-            "plain text line\n",
-            "{}\n",
-            r#"{{"level":"info","ts":"2024-01-25T19:10:21.764733+01:00","msg":"m2"}}"#,
-            "\n",
-        ),
-        "x".repeat(200),
-    ));
-
-    let mut output = Vec::new();
-    let app = App::new(Options {
-        buffer_size: NonZeroUsize::new(32).unwrap(),
-        max_message_size: NonZeroUsize::new(128).unwrap(),
-        concurrency: 2,
-        follow,
-        ..opts
-    });
-    app.run(vec![input], &mut output).unwrap();
-    assert_eq!(std::str::from_utf8(&output).unwrap(), expected);
 }
 
 #[test]
@@ -1059,43 +454,6 @@ fn test_issue_176_complex_span_json() {
 }
 
 #[test]
-fn test_nested_level_field_in_second_variant() {
-    let variant = |name: &str, level: Level, value: &str| settings::RawLevelFieldVariant {
-        names: vec![name.to_owned()],
-        values: [(level.into(), vec![value.to_owned()])].into_iter().collect(),
-        level: None,
-    };
-    let fields = || FieldOptions {
-        settings: Fields {
-            predefined: settings::PredefinedFields {
-                level: settings::LevelField {
-                    variants: vec![
-                        variant("level", Level::Info, "info"),
-                        variant("log.level", Level::Warning, "warn"),
-                    ],
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    for (data, expected) in [
-        (
-            r#"{"message":"test","log":{"level":"warn","x":1}}"#,
-            "|WRN| test log={ x=1 }\n",
-        ),
-        (r#"message=test log.level=warn log.x=1"#, "|WRN| test log.x=1\n"),
-    ] {
-        let mut output = Vec::new();
-        let app = App::new(options().with_expansion(ExpansionMode::Never).with_fields(fields()));
-        app.run(vec![input(format!("{data}\n"))], &mut output).unwrap();
-        assert_eq!(std::str::from_utf8(&output).unwrap(), expected, "{data}");
-    }
-}
-
-#[test]
 fn test_issue_176_complex_span_logfmt() {
     let input = input(concat!(
         r#"message=test span.name=main span.source=main.rs:12 span.extra=included"#,
@@ -1176,6 +534,47 @@ fn test_issue_176_unmatched_logfmt() {
     );
     app.run(vec![input], &mut output).unwrap();
     assert_eq!(std::str::from_utf8(&output).unwrap(), "test span.name=main\n");
+}
+
+fn input<S: Into<String>>(s: S) -> InputHolder {
+    InputHolder::new(InputReference::Stdin, Some(Box::new(Cursor::new(s.into()))))
+}
+
+fn options() -> Options {
+    Options {
+        theme: Arc::new(Theme::none()),
+        time_format: LinuxDateFormat::new("%Y-%m-%d %T.%3N").compile(),
+        raw: false,
+        raw_fields: false,
+        allow_prefix: false,
+        buffer_size: NonZeroUsize::new(4096).unwrap(),
+        max_message_size: NonZeroUsize::new(4096 * 1024).unwrap(),
+        concurrency: 1,
+        filter: Default::default(),
+        fields: FieldOptions::default(),
+        formatting: Formatting {
+            message: MessageFormatting {
+                format: MessageFormat::AutoQuoted,
+            },
+            ..Formatting::default()
+        },
+        time_zone: Tz::IANA(UTC),
+        hide_empty_fields: false,
+        sort: false,
+        follow: false,
+        sync_interval: Duration::from_secs(1),
+        input_info: Default::default(),
+        input_format: None,
+        dump_index: false,
+        app_dirs: None,
+        tail: 0,
+        delimiter: Delimiter::default(),
+        unix_ts_unit: None,
+        flatten: false,
+        ascii: AsciiMode::Off,
+        expand: Default::default(),
+        output_delimiter: "\n".to_string(),
+    }
 }
 
 #[test]
@@ -1268,13 +667,13 @@ fn test_input_badges_with_ascii_mode() {
     let app_unicode = App::new(options_unicode);
 
     // Get badges with ASCII mode ON
-    let badges_ascii = app_ascii.input_badges(&descriptors(&inputs));
+    let badges_ascii = app_ascii.input_badges(inputs.iter());
     assert!(badges_ascii.is_some(), "Should produce badges");
     let badges_a = badges_ascii.unwrap();
     println!("ASCII badges: {:?}", badges_a);
 
     // Get badges with ASCII mode OFF (Unicode)
-    let badges_utf8 = app_unicode.input_badges(&descriptors(&inputs));
+    let badges_utf8 = app_unicode.input_badges(inputs.iter());
     assert!(badges_utf8.is_some(), "Should produce badges");
     let badges_u = badges_utf8.unwrap();
     println!("Unicode badges: {:?}", badges_u);
@@ -1571,7 +970,7 @@ fn test_input_badges_with_emoji_variation_selectors() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
+    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
     assert_eq!(badges.len(), 1);
 
     // The badge should contain the emoji with variation selector
@@ -1599,7 +998,7 @@ fn test_input_badges_with_emojis() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
+    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
 
     // Both badges should be padded to the same width
     // The emoji file has width: 2 (emoji) + 8 (test.log) = 10
@@ -1627,7 +1026,7 @@ fn test_input_badges_compact_mode_with_emojis() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     // Should produce badges even with emojis in compact mode
     assert!(badges.is_some());
@@ -1653,7 +1052,7 @@ fn test_input_badges_cjk_characters() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
+    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
 
     // Both badges should be generated and padded correctly
     assert_eq!(badges.len(), 2);
@@ -1678,7 +1077,7 @@ fn test_input_badges_mixed_width_characters() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
+    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
 
     assert_eq!(badges.len(), 2);
     // Verify both badges were created
@@ -1703,7 +1102,7 @@ fn test_input_badges_compact_mode_common_prefix_with_emojis() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1724,7 +1123,7 @@ fn test_input_badges_minimal_mode() {
     let app = App::new(opts);
 
     // Minimal mode with single input should still produce badge
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
     assert!(badges.is_some());
 }
 
@@ -1741,7 +1140,7 @@ fn test_input_badges_none_mode_single_input() {
     let app = App::new(opts);
 
     // Minimal+None mode with single input should not produce badges
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
     assert!(badges.is_none());
 }
 
@@ -1764,7 +1163,7 @@ fn test_input_badges_none_mode_multiple_inputs() {
     let app = App::new(opts);
 
     // Minimal+None mode with multiple inputs should produce badges
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
     assert!(badges.is_some());
 }
 
@@ -1782,7 +1181,7 @@ fn test_input_badges_stdin() {
     opts.input_info = InputInfo::Full.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs)).expect("Should produce badges");
+    let badges = app.input_badges(inputs.iter()).expect("Should produce badges");
 
     assert_eq!(badges.len(), 2);
     assert!(badges[0].contains("<stdin>") || !badges[0].is_empty());
@@ -1818,7 +1217,7 @@ fn test_input_badges_compact_mode_long_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1848,7 +1247,7 @@ fn test_input_badges_compact_mode_short_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1887,7 +1286,7 @@ fn test_input_badges_compact_mode_emoji_in_long_names() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1926,7 +1325,7 @@ fn test_input_badges_compact_mode_medium_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1960,7 +1359,7 @@ fn test_input_badges_compact_mode_very_short_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -1987,7 +1386,7 @@ fn test_prepare_follow_badges() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let result = app.prepare_follow_badges(&descriptors(&inputs));
+    let result = app.prepare_follow_badges(inputs.iter());
 
     assert!(result.si.width > 0);
     assert!(result.si.synced.len() >= result.si.width);
@@ -2018,7 +1417,7 @@ fn test_prepare_follow_badges_single_input() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let result = app.prepare_follow_badges(&descriptors(&inputs));
+    let result = app.prepare_follow_badges(inputs.iter());
 
     assert!(result.si.width > 0);
     assert!(result.si.synced.len() >= result.si.width);
@@ -2049,8 +1448,8 @@ fn test_prepare_follow_badges_formatting() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let raw_badges = app.input_badges(&descriptors(&inputs)).unwrap();
-    let result = app.prepare_follow_badges(&descriptors(&inputs));
+    let raw_badges = app.input_badges(inputs.iter()).unwrap();
+    let result = app.prepare_follow_badges(inputs.iter());
 
     assert!(result.input.is_some());
     let formatted_badges = result.input.unwrap();
@@ -2078,7 +1477,7 @@ fn test_prepare_follow_badges_no_badges() {
     opts.theme = theme();
     let app = App::new(opts);
 
-    let result = app.prepare_follow_badges(&descriptors(&inputs));
+    let result = app.prepare_follow_badges(inputs.iter());
 
     assert!(result.si.width > 0);
     assert!(result.input.is_none());
@@ -2091,7 +1490,8 @@ fn test_process_segments() {
     let app = App::new(opts);
 
     let parser = app.parser();
-    let bfo = Arc::new(BufFactory::new(4096));
+    let bfo = BufFactory::new(4096);
+    let sfi = SegmentBufFactory::new(4096);
 
     let badges = FollowBadges {
         si: SyncIndicator {
@@ -2110,17 +1510,10 @@ fn test_process_segments() {
     let segment_buf = SegmentBuf::from(log_data.as_bytes());
     let segment = Segment::Complete(segment_buf);
 
-    txi.send((0, 0, 0, segment)).unwrap();
+    txi.send((0, 0, segment)).unwrap();
     drop(txi);
 
-    app.process_segments(
-        &parser,
-        &bfo,
-        &badges,
-        &[InputDescriptor::new(0, "<stdin>")],
-        rxi,
-        txo.clone(),
-    );
+    app.process_segments(&parser, &bfo, &sfi, &badges, rxi, txo.clone());
     drop(txo);
 
     let result = rxo.try_recv();
@@ -2133,25 +1526,15 @@ fn test_process_segments() {
     }
 }
 
-#[rstest]
-#[case::first(PartialPlacement::First, 0, "long", "  [0] long")]
-#[case::next(PartialPlacement::Next, 0, "long", "long")]
-#[case::last(PartialPlacement::Last, 1, "long\n", "long")]
-#[case::last_unterminated(PartialPlacement::Last, 0, "long", "long")]
-fn test_process_segments_incomplete(
-    #[case] part: PartialPlacement,
-    #[case] delimiter: usize,
-    #[case] data: &str,
-    #[case] expected: &str,
-    #[values(None, Some(InputFormat::Json))] input_format: Option<InputFormat>,
-) {
+#[test]
+fn test_process_segments_incomplete() {
     let mut opts = options();
     opts.theme = theme();
-    opts.input_format = input_format;
     let app = App::new(opts);
 
     let parser = app.parser();
-    let bfo = Arc::new(BufFactory::new(4096));
+    let bfo = BufFactory::new(4096);
+    let sfi = SegmentBufFactory::new(4096);
 
     let badges = FollowBadges {
         si: SyncIndicator {
@@ -2166,100 +1549,26 @@ fn test_process_segments_incomplete(
     let (txi, rxi) = channel::bounded(10);
     let (txo, rxo) = channel::bounded(10);
 
-    let segment = Segment::Incomplete(SegmentBuf::from(data.as_bytes()), part, delimiter);
+    let segment = Segment::Incomplete(SegmentBuf::from(b"incomplete"), PartialPlacement::First);
 
-    txi.send((0, 3, 0, segment)).unwrap();
+    txi.send((0, 0, segment)).unwrap();
     drop(txi);
 
-    app.process_segments(
-        &parser,
-        &bfo,
-        &badges,
-        &[InputDescriptor::new(0, "<stdin>")],
-        rxi,
-        txo.clone(),
-    );
+    app.process_segments(&parser, &bfo, &sfi, &badges, rxi, txo.clone());
     drop(txo);
 
-    // Every block is sent, as the merger takes the blocks of an input in order,
-    // but the part is shown only where text that is not a record is.
-    let (input, buf, index) = rxo.try_recv().expect("a message for the block");
-    assert_eq!(input, 0);
-    assert_eq!(index.block, 3);
-    assert!(index.lines.is_empty());
-    if input_format.is_none() {
-        assert_eq!(std::str::from_utf8(&buf).unwrap(), expected);
-        assert_eq!(index.part, Some(part));
-    } else {
-        assert!(buf.is_empty());
-        assert_eq!(index.part, None);
-    }
+    assert!(rxo.try_recv().is_err(), "Incomplete segments should not produce output");
 }
 
-#[rstest]
-#[case::first(b"abcdefg", 0, "> abc", false)]
-#[case::next_filling_buffer(b"abcdefg", 1, "def", true)]
-#[case::next_cut_short_by_end_of_input(b"abcdefg", 2, "g", false)]
-#[case::last(b"abcdefg\n", 2, "g", false)]
-fn test_split_entry_part(#[case] input: &[u8], #[case] n: usize, #[case] expected: &str, #[case] in_own_buffer: bool) {
-    let sfi = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sfi.clone(), b'\n');
-    let mut data = Cursor::new(input);
-    let mut items = scanner.items(&mut data).open_ended(true).with_max_segment_size(3);
-    let Some(Ok(Segment::Incomplete(segment, part, delimiter))) = items.nth(n) else {
-        panic!("no part {n}");
-    };
-    let at = segment.data().as_ptr();
-
-    let buf = split_entry_part(segment, part, delimiter, "> ");
-
-    assert_eq!(std::str::from_utf8(&buf).unwrap(), expected);
-    // A part sent in its own buffer is not copied, and any other is copied into a buffer of its size.
-    assert_eq!(buf.as_ptr() == at, in_own_buffer);
-    if !in_own_buffer {
-        assert_eq!(buf.capacity(), buf.len());
-    }
-}
-
-#[rstest]
-#[case::terminated(b"abcdefg\n", "\0", "efg\0")]
-#[case::terminated_crlf(b"abcdef\r\n", "\0", "ef\0")]
-#[case::unterminated(b"abcdefg", "\0", "efg\0")]
-#[case::unterminated_filling_buffer(b"abcdefgh", "\0", "\0")]
-#[case::not_fitting_output_delimiter(b"abcdefg\n", "\r\n", "efg\r\n")]
-fn test_end_last_part(#[case] input: &[u8], #[case] output_delimiter: &str, #[case] expected: &str) {
-    let sfi = Arc::new(SegmentBufFactory::new(4));
-    let scanner = Scanner::new(sfi.clone(), Delimiter::from(Newline));
-    let mut data = Cursor::new(input);
-    let Some(Ok(Segment::Incomplete(segment, PartialPlacement::Last, delimiter))) =
-        scanner.items(&mut data).with_max_segment_size(4).last()
-    else {
-        panic!("no last part");
-    };
-    let at = segment.data().as_ptr();
-    let capacity = segment.capacity();
-
-    let buf = end_last_part(segment, delimiter, output_delimiter.as_bytes());
-
-    assert_eq!(std::str::from_utf8(buf.data()).unwrap(), expected);
-    // The part keeps its buffer if the output delimiter fits in it.
-    if expected.len() <= capacity {
-        assert_eq!(buf.data().as_ptr(), at);
-    }
-}
-
-#[rstest]
-#[case::complete(Segment::Complete(SegmentBuf::from(
-    r#"{"level":"info","msg":"test","ts":"2023-12-07T20:07:05.949Z"}"#.as_bytes()
-)))]
-#[case::incomplete(Segment::Incomplete(SegmentBuf::from(b"long"), PartialPlacement::First, 0))]
-fn test_process_segments_receiver_dropped(#[case] segment: Segment) {
+#[test]
+fn test_process_segments_receiver_dropped() {
     let mut opts = options();
     opts.theme = theme();
     let app = App::new(opts);
 
     let parser = app.parser();
-    let bfo = Arc::new(BufFactory::new(4096));
+    let bfo = BufFactory::new(4096);
+    let sfi = SegmentBufFactory::new(4096);
 
     let badges = FollowBadges {
         si: SyncIndicator {
@@ -2273,13 +1582,16 @@ fn test_process_segments_receiver_dropped(#[case] segment: Segment) {
 
     let (txi, rxi) = channel::bounded(10);
     let (txo, rxo) = channel::bounded(10);
+
+    let log_data = r#"{"level":"info","msg":"test","ts":"2023-12-07T20:07:05.949Z"}"#;
+    let segment = Segment::Complete(SegmentBuf::from(log_data.as_bytes()));
 
     drop(rxo);
 
-    txi.send((0, 0, 0, segment)).unwrap();
+    txi.send((0, 0, segment)).unwrap();
     drop(txi);
 
-    app.process_segments(&parser, &bfo, &badges, &[InputDescriptor::new(0, "<stdin>")], rxi, txo);
+    app.process_segments(&parser, &bfo, &sfi, &badges, rxi, txo);
 }
 
 #[test]
@@ -2307,7 +1619,7 @@ fn test_input_badges_compact_mode_two_char_prefix() {
     opts.input_info = InputInfo::Compact.into();
     let app = App::new(opts);
 
-    let badges = app.input_badges(&descriptors(&inputs));
+    let badges = app.input_badges(inputs.iter());
 
     assert!(badges.is_some());
     let badges = badges.unwrap();
@@ -2749,6 +2061,22 @@ fn test_bug_comprehensive_multiline_prefix_remainder_raw() {
 
 // --- merge_segments tests ---
 
+fn test_badges(width: usize) -> FollowBadges {
+    FollowBadges {
+        si: SyncIndicator {
+            width,
+            synced: "S".repeat(width),
+            failed: "F".repeat(width),
+            placeholder: " ".repeat(width),
+        },
+        input: None,
+    }
+}
+
+fn ts(sec: i64, nsec: u32) -> Timestamp {
+    Timestamp { sec, nsec }
+}
+
 #[test]
 fn test_merge_segments_single_line() {
     let app = App::new(options());
@@ -2759,13 +2087,12 @@ fn test_merge_segments_single_line() {
     let buf = b"  hello world".to_vec();
     let index = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf.len(),
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf.into(), index)).unwrap();
+    txo.send((0, buf, index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2785,7 +2112,6 @@ fn test_merge_segments_ordered_timestamps() {
     let buf1 = b"  line-one".to_vec();
     let index1 = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf1.len(),
             ts: ts(100, 0),
@@ -2795,15 +2121,14 @@ fn test_merge_segments_ordered_timestamps() {
     let buf2 = b"  line-two".to_vec();
     let index2 = TimestampIndex {
         block: 1,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf2.len(),
             ts: ts(200, 0),
         }],
     };
 
-    txo.send((0, buf1.into(), index1)).unwrap();
-    txo.send((0, buf2.into(), index2)).unwrap();
+    txo.send((0, buf1, index1)).unwrap();
+    txo.send((0, buf2, index2)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2823,7 +2148,6 @@ fn test_merge_segments_interleaved_sources() {
     let buf0 = b"  from-source-0".to_vec();
     let index0 = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf0.len(),
             ts: ts(200, 0),
@@ -2833,15 +2157,14 @@ fn test_merge_segments_interleaved_sources() {
     let buf1 = b"  from-source-1".to_vec();
     let index1 = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf1.len(),
             ts: ts(100, 0),
         }],
     };
 
-    txo.send((0, buf0.into(), index0)).unwrap();
-    txo.send((1, buf1.into(), index1)).unwrap();
+    txo.send((0, buf0, index0)).unwrap();
+    txo.send((1, buf1, index1)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2865,25 +2188,23 @@ fn test_merge_segments_out_of_order_shows_failed() {
     let buf1 = b"  late".to_vec();
     let index1 = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf1.len(),
             ts: ts(200, 0),
         }],
     };
-    txo.send((0, buf1.into(), index1)).unwrap();
+    txo.send((0, buf1, index1)).unwrap();
 
     // Second batch: ts=100 (arrives after ts=200 has been flushed)
     let buf2 = b"  early".to_vec();
     let index2 = TimestampIndex {
         block: 1,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf2.len(),
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf2.into(), index2)).unwrap();
+    txo.send((0, buf2, index2)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -2898,7 +2219,7 @@ fn test_merge_segments_out_of_order_shows_failed() {
 fn test_merge_segments_empty_channel() {
     let app = App::new(options());
     let badges = test_badges(2);
-    let (txo, rxo) = channel::bounded::<(usize, OutputBuf, TimestampIndex)>(10);
+    let (txo, rxo) = channel::bounded::<(usize, Vec<u8>, TimestampIndex)>(10);
     drop(txo);
 
     let mut output = Vec::new();
@@ -2921,13 +2242,12 @@ fn test_merge_segments_flushes_window_when_inputs_close() {
     let buf = b"  hello".to_vec();
     let index = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..buf.len(),
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf.into(), index)).unwrap();
+    txo.send((0, buf, index)).unwrap();
     drop(txo);
 
     let (txr, rxr) = channel::bounded(1);
@@ -2942,48 +2262,6 @@ fn test_merge_segments_flushes_window_when_inputs_close() {
         .expect("merge_segments did not return after inputs closed")
         .unwrap();
     assert_eq!(String::from_utf8(output).unwrap(), "SShello\n");
-}
-
-#[rstest]
-#[case::record(true, b"SShello\0")]
-#[case::unsorted_text(false, b"  hello\0")]
-fn test_merge_segments_flushes_output_before_waiting(#[case] record: bool, #[case] expected: &[u8]) {
-    // The input channel stays open, so the entry can reach the output only
-    // through a flush made before waiting for more input.
-    let app = App::new(Options {
-        sync_interval: Duration::ZERO,
-        output_delimiter: "\0".into(),
-        ..options()
-    });
-    let badges = test_badges(2);
-    let (txo, rxo) = channel::bounded(10);
-    let (txf, rxf) = channel::unbounded();
-
-    let buf = b"  hello".to_vec();
-    let mut index = TimestampIndex::new(0);
-    if record {
-        index.lines.push(TimestampIndexLine {
-            location: 0..buf.len(),
-            ts: ts(100, 0),
-        });
-    }
-    txo.send((0, buf.into(), index)).unwrap();
-
-    let merger = std::thread::spawn(move || {
-        let mut output = FlushProbe {
-            pending: Vec::new(),
-            flushed: txf,
-        };
-        app.merge_segments(&badges, rxo, &mut output, 1)
-    });
-
-    let flushed = rxf
-        .recv_timeout(Duration::from_secs(10))
-        .expect("output was not flushed while inputs were open");
-    assert_eq!(flushed, expected);
-
-    drop(txo);
-    merger.join().unwrap().unwrap();
 }
 
 #[test]
@@ -3018,7 +2296,6 @@ fn test_merge_segments_multiple_lines_per_segment() {
     let buf = b"  line-A\n  line-B".to_vec();
     let index = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![
             TimestampIndexLine {
                 location: 0..8, // "  line-A"
@@ -3030,7 +2307,7 @@ fn test_merge_segments_multiple_lines_per_segment() {
             },
         ],
     };
-    txo.send((0, buf.into(), index)).unwrap();
+    txo.send((0, buf, index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -3042,47 +2319,35 @@ fn test_merge_segments_multiple_lines_per_segment() {
 }
 
 #[test]
-fn test_merge_segments_text_stays_with_record_before_it() {
-    // Text after a record, such as a stack trace, is sorted by that record's
-    // timestamp, so a record of another input does not come in between.
+fn test_merge_segments_gap_with_timestamp() {
+    // Gap text before an indexed line gets the next indexed line's timestamp
+    // and is inserted into the window.
     let app = App::new(options());
     let badges = test_badges(2);
     let (txo, rxo) = channel::bounded(10);
 
-    // Buffer layout: "  line-A\n  trace\n  line-C"
-    let buf0 = b"  line-A\n  trace\n  line-C".to_vec();
-    let index0 = TimestampIndex {
+    // Buffer layout: "gap-text\n  line-A"
+    // gap is 0..8 ("gap-text"), delimiter at 8..9, indexed line at 9..17 ("  line-A")
+    let buf = b"gap-text\n  line-A".to_vec();
+    let index = TimestampIndex {
         block: 0,
-        part: None,
-        lines: vec![
-            TimestampIndexLine {
-                location: 0..8, // "  line-A"
-                ts: ts(100, 0),
-            },
-            TimestampIndexLine {
-                location: 17..25, // "  line-C"
-                ts: ts(300, 0),
-            },
-        ],
-    };
-    let buf1 = b"  line-B".to_vec();
-    let index1 = TimestampIndex {
-        block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
-            location: 0..8,
-            ts: ts(200, 0),
+            location: 9..17, // "  line-A"
+            ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf0.into(), index0)).unwrap();
-    txo.send((1, buf1.into(), index1)).unwrap();
+    txo.send((0, buf, index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
     app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
 
     let result = String::from_utf8(output).unwrap();
-    assert_eq!(result, "SSline-A\nSStrace\nSSline-B\nSSline-C\n");
+    // Gap "gap-text" gets ts=100 from the next indexed line, inserted into window.
+    // Both gap and line have ts=100, so they sort by offset: gap(0) before line(9).
+    // Gap goes through window flush: sync + buf[0..8][2..] + delim = "SS" + "p-text" + "\n"
+    // Line goes through window flush: sync + buf[9..17][2..] + delim = "SS" + "line-A" + "\n"
+    assert_eq!(result, "SSp-text\nSSline-A\n");
 }
 
 #[test]
@@ -3097,10 +2362,9 @@ fn test_merge_segments_gap_without_timestamp_direct_output() {
     let buf = b"unparsed text\n".to_vec();
     let index = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![],
     };
-    txo.send((0, buf.into(), index)).unwrap();
+    txo.send((0, buf, index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -3113,8 +2377,8 @@ fn test_merge_segments_gap_without_timestamp_direct_output() {
 
 #[test]
 fn test_merge_segments_gap_trimming_no_trailing_delimiter() {
-    // Text with no record before it is written as is, ended by the output
-    // delimiter even if it does not end with one.
+    // When the gap region doesn't end with the output delimiter,
+    // trimmed == end, so start < trimmed may still hold.
     let app = App::new(options());
     let badges = test_badges(2);
     let (txo, rxo) = channel::bounded(10);
@@ -3124,20 +2388,22 @@ fn test_merge_segments_gap_trimming_no_trailing_delimiter() {
     let buf = b"  gap-no-delim  line-A".to_vec();
     let index = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 14..22, // "  line-A"
             ts: ts(100, 0),
         }],
     };
-    txo.send((0, buf.into(), index)).unwrap();
+    txo.send((0, buf, index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
     app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
 
     let result = String::from_utf8(output).unwrap();
-    assert_eq!(result, "  gap-no-delim\nSSline-A\n");
+    // Gap "  gap-no-delim" doesn't end with \n, so trimmed=14=end.
+    // start(0) < trimmed(14), ts is Some(100), so inserted into window.
+    // Output: sync + gap[2..] + delim, sync + line[2..] + delim
+    assert_eq!(result, "SSgap-no-delim\nSSline-A\n");
 }
 
 #[test]
@@ -3152,7 +2418,6 @@ fn test_merge_segments_empty_gap_skipped() {
     let buf = b"  line-A\n  line-B".to_vec();
     let index = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![
             TimestampIndexLine {
                 location: 0..8, // "  line-A"
@@ -3164,7 +2429,7 @@ fn test_merge_segments_empty_gap_skipped() {
             },
         ],
     };
-    txo.send((0, buf.into(), index)).unwrap();
+    txo.send((0, buf, index)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
@@ -3178,7 +2443,7 @@ fn test_merge_segments_empty_gap_skipped() {
 
 #[test]
 fn test_merge_segments_trailing_gap_with_source_history() {
-    // Trailing gap (after last indexed line) is sorted with the record before it
+    // Trailing gap (after last indexed line) uses source_last_ts as fallback
     let app = App::new(options());
     let badges = test_badges(2);
     let (txo, rxo) = channel::bounded(10);
@@ -3187,7 +2452,6 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     let buf1 = b"  line-A".to_vec();
     let index1 = TimestampIndex {
         block: 0,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..8,
             ts: ts(100, 0),
@@ -3199,169 +2463,25 @@ fn test_merge_segments_trailing_gap_with_source_history() {
     let buf2 = b"  line-B\n  trailing-gap".to_vec();
     let index2 = TimestampIndex {
         block: 1,
-        part: None,
         lines: vec![TimestampIndexLine {
             location: 0..8, // "  line-B"
             ts: ts(200, 0),
         }],
     };
 
-    txo.send((0, buf1.into(), index1)).unwrap();
-    txo.send((0, buf2.into(), index2)).unwrap();
+    txo.send((0, buf1, index1)).unwrap();
+    txo.send((0, buf2, index2)).unwrap();
     drop(txo);
 
     let mut output = Vec::new();
     app.merge_segments(&badges, rxo, &mut output, 1).unwrap();
 
     let result = String::from_utf8(output).unwrap();
-    // The trailing gap is sorted by line-B (ts=200), the record right before it.
-    assert_eq!(result, "SSline-A\nSSline-B\nSStrailing-gap\n");
-}
-
-#[test]
-fn test_follow_merges_inputs_by_time() {
-    let app = App::new(Options {
-        follow: true,
-        ..options()
-    });
-    let record = |sec, msg| format!(r#"{{"ts":"2026-07-06T10:00:0{sec}Z","msg":"{msg}"}}"#);
-    let inputs = vec![
-        input(format!("{}\n{}\n", record(0, "a0"), record(2, "a2"))),
-        input(format!("{}\n{}\n", record(1, "b1"), record(3, "b3"))),
-    ];
-
-    let mut output = Vec::new();
-    app.run(inputs, &mut output).unwrap();
-
-    assert_eq!(
-        String::from_utf8(output).unwrap(),
-        concat!(
-            "#0 | <stdin> | 2026-07-06 10:00:00.000 a0\n",
-            "#1 | <stdin> | 2026-07-06 10:00:01.000 b1\n",
-            "#0 | <stdin> | 2026-07-06 10:00:02.000 a2\n",
-            "#1 | <stdin> | 2026-07-06 10:00:03.000 b3\n",
-        )
-    );
-}
-
-#[rstest]
-#[case::kept_together(
-    vec![
-        part_block(0, 0, "  xx", PartialPlacement::First),
-        text_block(1, 0, "text\n"),
-        part_block(0, 1, "yy", PartialPlacement::Last),
-    ],
-    "  xxyy\ntext\n",
-)]
-#[case::taken_in_block_order(
-    vec![
-        part_block(0, 1, "  xx", PartialPlacement::First),
-        part_block(0, 3, "zz", PartialPlacement::Last),
-        record_block(0, 0, "  rec-a", 100),
-        part_block(0, 2, "yy", PartialPlacement::Next),
-    ],
-    "SSrec-a\nSSxxyyzz\n",
-)]
-#[case::sorted_after_record_before(
-    vec![
-        record_block(0, 0, "  rec-a", 300),
-        part_block(0, 1, "  xx", PartialPlacement::First),
-        part_block(0, 2, "yy", PartialPlacement::Last),
-        record_block(1, 0, "  rec-b", 200),
-    ],
-    "SSrec-b\nSSrec-a\nSSxxyy\n",
-)]
-#[case::ended_by_next_block(
-    vec![
-        part_block(1, 0, "  xx", PartialPlacement::First),
-        text_block(1, 1, "after\n"),
-        text_block(0, 0, "other\n"),
-    ],
-    "  xx\nafter\nother\n",
-)]
-#[case::ended_when_inputs_close(
-    vec![
-        record_block(0, 0, "  rec-a", 100),
-        part_block(0, 1, "  xx", PartialPlacement::First),
-    ],
-    "SSrec-a\nSSxx\n",
-)]
-#[case::written_as_they_come_without_timestamp(
-    vec![
-        part_block(0, 0, "  xx", PartialPlacement::First),
-        record_block(1, 0, "  rec-b", 100),
-        text_block(2, 0, "text\n"),
-        part_block(0, 1, "yy", PartialPlacement::Last),
-    ],
-    "  xxyy\ntext\nSSrec-b\n",
-)]
-#[case::held_while_other_entry_is_open(
-    vec![
-        part_block(0, 0, "  aa", PartialPlacement::First),
-        part_block(1, 0, "  xx", PartialPlacement::First),
-        part_block(1, 1, "yy", PartialPlacement::Last),
-        part_block(0, 1, "bb", PartialPlacement::Last),
-    ],
-    "  aabb\n  xxyy\n",
-)]
-fn test_merge_segments_long_entry(#[case] messages: Vec<Processed>, #[case] expected: &str) {
-    // The sync interval is far longer than the test, so a split entry can only end early
-    // because its next part will not come.
-    assert_eq!(merge(Duration::from_secs(3600), messages), expected);
-}
-
-#[rstest]
-#[case::rest("yy", "SSrec-a\nSSxx\nSSrec-b\n  yy\n")]
-#[case::empty_rest("", "SSrec-a\nSSxx\nSSrec-b\n")]
-fn test_merge_segments_long_entry_ended_when_rest_is_late(#[case] rest: &str, #[case] expected: &str) {
-    // With a zero sync interval, the rest of the entry is late at once,
-    // so the entry is ended and the record of the other input is written.
-    // A rest that turns out to be empty adds nothing to the entry already ended.
-    let messages = vec![
-        record_block(0, 0, "  rec-a", 100),
-        part_block(0, 1, "  xx", PartialPlacement::First),
-        record_block(1, 0, "  rec-b", 200),
-        part_block(0, 2, rest, PartialPlacement::Last),
-    ];
-    assert_eq!(merge(Duration::ZERO, messages), expected);
-}
-
-#[test]
-fn test_merge_segments_long_entry_kept_when_rest_is_late_and_nothing_else_is_due() {
-    // With a zero sync interval, the rest of the entry is late at once,
-    // but with nothing else to be written in between, it is still waited for.
-    let messages = vec![
-        record_block(0, 0, "  rec-a", 100),
-        part_block(0, 1, "  xx", PartialPlacement::First),
-        part_block(0, 2, "yy", PartialPlacement::Next),
-        part_block(0, 3, "zz", PartialPlacement::Last),
-    ];
-    assert_eq!(merge(Duration::ZERO, messages), "SSrec-a\nSSxxyyzz\n");
-}
-
-#[test]
-fn test_follow_shows_long_entry_between_records() {
-    // The entry is larger than the maximum message size, so it is read in several parts.
-    let app = App::new(Options {
-        follow: true,
-        buffer_size: NonZeroUsize::new(1024).unwrap(),
-        max_message_size: NonZeroUsize::new(2048).unwrap(),
-        ..options()
-    });
-    let long = "x".repeat(5000);
-    let data = format!(
-        "{}\n{long}\n{}\n",
-        r#"{"ts":"2026-07-06T10:00:00Z","msg":"before"}"#, r#"{"ts":"2026-07-06T10:00:01Z","msg":"after"}"#,
-    );
-
-    let mut output = Vec::new();
-    app.run(vec![input(data)], &mut output).unwrap();
-
-    let output = String::from_utf8(output).unwrap();
-    assert_eq!(
-        output,
-        format!("2026-07-06 10:00:00.000 before\n{long}\n2026-07-06 10:00:01.000 after\n")
-    );
+    // line-A (ts=100) flushed first, then segment 2 arrives.
+    // Trailing gap uses source_last_ts from segment 1 (ts=100) since gap timestamps
+    // are computed before indexed lines update source_last_ts.
+    // So: trailing-gap(ts=100) sorts before line-B(ts=200).
+    assert_eq!(result, "SSline-A\nSStrailing-gap\nSSline-B\n");
 }
 
 // --- BlockScanner tests ---
@@ -3380,30 +2500,26 @@ fn test_block_scanner_continues_numbering_across_scans() {
     let scanner = Scanner::new(sfi, Delimiter::default());
     let (txi, rxi) = channel::unbounded();
 
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), SEGMENT_SIZE);
-    blocks
-        .scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi, true)
-        .unwrap();
-    blocks
-        .scan(&mut Cursor::new(b"b1\nb2\n".to_vec()), 0, &txi, true)
-        .unwrap();
+    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
+    blocks.scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi).unwrap();
+    blocks.scan(&mut Cursor::new(b"b1\nb2\n".to_vec()), 0, &txi).unwrap();
     drop(txi);
 
     let text = |segment: &Segment| match segment {
-        Segment::Complete(buf) | Segment::Incomplete(buf, ..) => String::from_utf8_lossy(buf.data()).into_owned(),
+        Segment::Complete(buf) | Segment::Incomplete(buf, _) => String::from_utf8_lossy(buf.data()).into_owned(),
     };
     let scanned = rxi
         .iter()
-        .map(|(_, block, offset, segment)| (block, offset, text(&segment)))
+        .map(|(_, block, segment)| (block, text(&segment)))
         .collect_vec();
 
     assert_eq!(
         scanned,
         vec![
-            (0, 0, "a1\n".to_owned()),
-            (1, 3, "a2\n".to_owned()),
-            (2, 6, "b1\n".to_owned()),
-            (3, 9, "b2\n".to_owned()),
+            (0, "a1\n".to_owned()),
+            (1, "a2\n".to_owned()),
+            (2, "b1\n".to_owned()),
+            (3, "b2\n".to_owned()),
         ]
     );
 }
@@ -3416,446 +2532,14 @@ fn test_block_scanner_stops_scanning_when_receiver_is_gone() {
 
     let sfi = Arc::new(SegmentBufFactory::new(SEGMENT_SIZE));
     let scanner = Scanner::new(sfi, Delimiter::default());
-    let (txi, rxi) = channel::unbounded::<(usize, usize, u64, Segment)>();
+    let (txi, rxi) = channel::unbounded::<(usize, usize, Segment)>();
     drop(rxi);
 
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), SEGMENT_SIZE);
+    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
     let mut input = Cursor::new(b"a1\na2\na3\na4\n".to_vec());
-    blocks.scan(&mut input, 0, &txi, false).unwrap();
+    blocks.scan(&mut input, 0, &txi).unwrap();
 
     // Only the first segment was read, and its failed hand-off was not counted.
     assert_eq!(input.position(), SEGMENT_SIZE as u64);
     assert_eq!(blocks.block, 0);
-}
-
-#[test]
-fn test_block_scanner_completes_line_split_across_scans() {
-    // A writer may append a single line in several writes, each of them
-    // triggering a separate scan. The unterminated end of the first write must
-    // wait for the rest of its line instead of being sent as a line of its own.
-    let scanned = scan_chunks(
-        1024,
-        &[
-            (br#"{"msg":"a"}"#.as_slice(), true),
-            (b"\n{\"msg\":\"hel", true),
-            (b"lo\"}\n", true),
-        ],
-    );
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![],
-            vec!["{\"msg\":\"a\"}\n".to_owned()],
-            vec!["{\"msg\":\"hello\"}\n".to_owned()],
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_flushes_held_tail() {
-    // When the input is replaced or ends, the held tail will not be completed
-    // and is sent as it is.
-    let scanned = scan_chunks(1024, &[(b"a1\na2", true), (b"", false)]);
-
-    assert_eq!(scanned, vec![vec!["a1\n".to_owned()], vec!["a2".to_owned()]]);
-}
-
-#[test]
-fn test_block_scanner_passes_overlong_tail() {
-    // An unterminated tail is not held back once it reaches the maximum segment
-    // size, as it would not fit in a single segment anyway.
-    let scanned = scan_chunks(4, &[(b"abcdefgh", true), (b"", true)]);
-
-    assert_eq!(scanned[0].concat(), "abcdefgh");
-    assert!(scanned[1].is_empty());
-}
-
-#[test]
-fn test_block_scanner_holds_short_tail_after_long_data() {
-    // The tail is held back by its own length, not by the length of the
-    // complete lines read along with it.
-    let scanned = scan_chunks(8, &[(b"a1\na2\na3\nb", true), (b"c\n", true)]);
-
-    assert_eq!(scanned[0].concat(), "a1\na2\na3\n");
-    assert_eq!(scanned[1], vec!["bc\n".to_owned()]);
-}
-
-#[rstest]
-#[case::byte(Delimiter::Byte(b'\n'), b"a\n", b"a\n")]
-#[case::str(Delimiter::Str("\n".into()), b"a\n", b"a\n")]
-#[case::newline(Delimiter::Newline, b"a\n", b"a\n")]
-#[case::pretty_compatible(Delimiter::PrettyCompatible, b"a\n", b"a\n")]
-#[case::json(Delimiter::Json, b"{}\n{}", b"{}\n")]
-fn test_tail_holding_reader_keeps_delimiter_after_empty_read(
-    #[case] delimiter: Delimiter,
-    #[case] data: &[u8],
-    #[case] expected: &[u8],
-) {
-    // A read into an empty buffer, as the scanner does after its last segment, keeps what
-    // it would have passed on for the next scan, which passes it on once the file grows.
-    let searcher = delimiter.into_searcher();
-    let mut inner = Cursor::new(data);
-
-    let mut reader = TailHoldingReader::new(HeldTail::default(), &mut inner, &searcher, 1024);
-    assert_eq!(reader.read(&mut []).unwrap(), 0);
-    let tail = reader.into_tail();
-
-    let mut grown = (&mut inner).chain(&b"x"[..]);
-    let mut reader = TailHoldingReader::new(tail, &mut grown, &searcher, 1024);
-    let mut out = Vec::new();
-    reader.read_to_end(&mut out).unwrap();
-    assert_eq!(out, expected);
-}
-
-#[rstest]
-fn test_block_scanner_searches_held_tail_once(#[values(1, 64)] scans: usize, #[values(false, true)] terminated: bool) {
-    // An unterminated tail held back while it grows is not searched again for the delimiter
-    // each time it grows, in a single scan or across scans.
-    const CHUNKS: usize = 64;
-    const CHUNK: usize = 64 * 1024;
-
-    let line = "x".repeat(CHUNKS * CHUNK);
-    let end = if terminated { "\n" } else { "" };
-    let delimiter = CountingNewline::default();
-    let sfi = Arc::new(SegmentBufFactory::new(CHUNK));
-    let scanner = Scanner::new(sfi, delimiter.clone());
-    let (txi, rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), 2 * line.len());
-
-    let mut sent = Vec::new();
-    let data = format!("{line}{end}");
-    for chunk in data.as_bytes().chunks(data.len().div_ceil(scans)) {
-        blocks.scan(&mut Cursor::new(chunk), 0, &txi, true).unwrap();
-        sent.extend(rxi.try_iter().map(|(_, _, _, segment)| segment.data().to_vec()));
-    }
-    let held = delimiter.searched();
-    blocks.scan(&mut std::io::empty(), 0, &txi, false).unwrap();
-    sent.extend(rxi.try_iter().map(|(_, _, _, segment)| segment.data().to_vec()));
-
-    assert!(
-        held <= 2 * data.len(),
-        "{held} bytes searched to hold {} bytes",
-        data.len()
-    );
-    assert!(
-        sent.concat() == data.as_bytes(),
-        "unexpected data of {} bytes",
-        sent.concat().len()
-    );
-}
-
-#[test]
-fn test_block_scanner_continues_overlong_line_across_scans() {
-    // A line too long to be held back is passed on as it is written, but it is
-    // left open, so that the next scan continues it instead of starting a new line.
-    use PartialPlacement::*;
-
-    let scanned = scan_segments(4, &[(b"x1\nabcdefgh", true), (b"ijklmn", true), (b"op\ny1\n", true)]);
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![
-                Segment::Complete(b"x1\n".into()),
-                Segment::Incomplete(b"abcd".into(), First, 0),
-                Segment::Incomplete(b"efgh".into(), Next, 0),
-            ],
-            vec![
-                Segment::Incomplete(b"ijkl".into(), Next, 0),
-                Segment::Incomplete(b"mn".into(), Next, 0),
-            ],
-            vec![
-                Segment::Incomplete(b"op\n".into(), Last, 1),
-                Segment::Complete(b"y1\n".into()),
-            ],
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_ends_open_overlong_line_on_flush() {
-    // A short continuation is held back like any unterminated tail, and when the
-    // input is replaced or ends, it is sent as the last part of the open line.
-    use PartialPlacement::*;
-
-    let scanned = scan_segments(4, &[(b"abcdefgh", true), (b"ij", true), (b"", false), (b"x1\n", true)]);
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![
-                Segment::Incomplete(b"abcd".into(), First, 0),
-                Segment::Incomplete(b"efgh".into(), Next, 0),
-            ],
-            vec![],
-            vec![Segment::Incomplete(b"ij".into(), Last, 0)],
-            vec![Segment::Complete(b"x1\n".into())],
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_ends_open_overlong_line_on_flush_after_whole_parts() {
-    // The open line ends right after a whole part, with nothing held back, so when the input
-    // is replaced or ends, an empty last part is sent to end it.
-    use PartialPlacement::*;
-
-    let scanned = scan_segments(4, &[(b"abcdefgh", true), (b"", false), (b"x1\n", true)]);
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![
-                Segment::Incomplete(b"abcd".into(), First, 0),
-                Segment::Incomplete(b"efgh".into(), Next, 0),
-            ],
-            vec![Segment::Incomplete(b"".into(), Last, 0)],
-            vec![Segment::Complete(b"x1\n".into())],
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_propagates_read_error() {
-    struct FailingReader;
-
-    impl Read for FailingReader {
-        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::other("read error"))
-        }
-    }
-
-    let sfi = Arc::new(SegmentBufFactory::new(1024));
-    let scanner = Scanner::new(sfi, Delimiter::default());
-    let (txi, _rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), 1024);
-
-    for hold_tail in [true, false] {
-        assert!(blocks.scan(&mut FailingReader, 0, &txi, hold_tail).is_err());
-    }
-    assert_eq!(blocks.block, 0);
-}
-
-#[test]
-fn test_cat_passes_record_origin() {
-    let (app, capture) = app_with_origin_capture(options().with_input_info(InputInfo::None.into()));
-
-    let inputs = vec![
-        file_input("a.log", "msg=a1\nmsg=a2\n"),
-        file_input("b.log", "msg=b1\n"),
-        input("msg=c1\n"),
-    ];
-    let mut output = Vec::new();
-    app.run(inputs, &mut output).unwrap();
-
-    assert_eq!(
-        std::str::from_utf8(&output).unwrap(),
-        "msg=a1\nmsg=a2\nmsg=b1\nmsg=c1\n"
-    );
-    assert_eq!(
-        *capture.origins.lock().unwrap(),
-        vec![
-            (descriptor(0, "a.log"), 0..6),
-            (descriptor(0, "a.log"), 7..13),
-            (descriptor(1, "b.log"), 0..6),
-            (descriptor(2, "<stdin>"), 0..6),
-        ]
-    );
-}
-
-#[test]
-fn test_cat_passes_record_origin_across_segments() {
-    // A small buffer splits the input into several segments, so the offsets of
-    // later records include the sizes of the segments before them.
-    let (app, capture) = app_with_origin_capture(Options {
-        buffer_size: NonZeroUsize::new(8).unwrap(),
-        ..options()
-    });
-
-    let mut output = Vec::new();
-    app.run(vec![input("msg=a1\nmsg=a2\nmsg=a3\n")], &mut output).unwrap();
-
-    assert_eq!(
-        *capture.origins.lock().unwrap(),
-        vec![
-            (descriptor(0, "<stdin>"), 0..6),
-            (descriptor(0, "<stdin>"), 7..13),
-            (descriptor(0, "<stdin>"), 14..20),
-        ]
-    );
-}
-
-#[test]
-fn test_sort_passes_record_origin() {
-    let (app, capture) = app_with_origin_capture(options().with_sort(true));
-
-    const M1: &str = r#"{"ts":"2024-01-25T19:10:01Z","msg":"m1"}"#;
-    const M2: &str = r#"{"ts":"2024-01-25T19:10:02Z","msg":"m2"}"#;
-    const M3: &str = r#"{"ts":"2024-01-25T19:10:03Z","msg":"m3"}"#;
-    let inputs = vec![input(format!("{M1}\n{M3}\n")), input(format!("{M2}\n"))];
-    let mut output = Vec::new();
-    app.run(inputs, &mut output).unwrap();
-
-    let n = M1.len() as u64;
-    let mut origins = capture.origins.lock().unwrap().clone();
-    origins.sort_by_key(|(input, range)| (input.index, range.start));
-    assert_eq!(
-        origins,
-        vec![
-            (descriptor(0, "<stdin>"), 0..n),
-            (descriptor(0, "<stdin>"), n + 1..2 * n + 1),
-            (descriptor(1, "<stdin>"), 0..n),
-        ]
-    );
-}
-
-#[test]
-fn test_process_segments_passes_record_origin() {
-    let (app, capture) = app_with_origin_capture(options());
-
-    let parser = app.parser();
-    let bfo = Arc::new(BufFactory::new(4096));
-    let badges = test_badges(2);
-    let inputs = [descriptor(0, "a.log"), descriptor(1, "b.log")];
-
-    let (txi, rxi) = channel::bounded(10);
-    let (txo, rxo) = channel::bounded(10);
-
-    const A1: &str = r#"{"ts":"2024-01-25T19:10:02Z","msg":"a1"}"#;
-    const B1: &str = r#"{"ts":"2024-01-25T19:10:01Z","msg":"b1"}"#;
-    let segment = |data: &str| Segment::Complete(SegmentBuf::from(data.as_bytes()));
-    txi.send((1, 0, 100, segment(B1))).unwrap();
-    txi.send((0, 0, 200, segment(A1))).unwrap();
-    drop(txi);
-
-    app.process_segments(&parser, &bfo, &badges, &inputs, rxi, txo);
-
-    let n = A1.len() as u64;
-    assert_eq!(rxo.iter().count(), 2);
-    assert_eq!(
-        *capture.origins.lock().unwrap(),
-        vec![
-            (descriptor(1, "b.log"), 100..100 + n),
-            (descriptor(0, "a.log"), 200..200 + n),
-        ]
-    );
-}
-
-#[test]
-fn test_origin_slice() {
-    let input = descriptor(0, "a.log");
-    let origin = Origin::new(&input, 100, 20);
-    assert_eq!(origin.range, 100..120);
-
-    let part = origin.slice(5..8);
-    assert_eq!(part.input, &input);
-    assert_eq!(part.range, 105..108);
-}
-
-#[test]
-fn test_input_reference_name() {
-    assert_eq!(InputReference::Stdin.name(), "<stdin>");
-    let path = crate::input::InputPath::new("logs/a.log".into(), "/var/logs/a.log".into());
-    assert_eq!(InputReference::File(path).name(), "logs/a.log");
-}
-
-#[test]
-fn test_compact_input_names() {
-    let app = App::new(options());
-    let p = &app.punctuation;
-    let names = |names: &[&str]| {
-        app.compact_input_names(names)
-            .into_iter()
-            .map(|name| name.concat())
-            .collect_vec()
-    };
-
-    // Short names without a long common prefix stay as they are.
-    assert_eq!(names(&["a.log", "b.log"]), vec!["a.log", "b.log"]);
-
-    // A long common prefix is replaced with the common-part marker, keeping 4 of its last characters.
-    assert_eq!(
-        names(&["/var/log/app/a.log", "/var/log/app/b.log"]),
-        vec![
-            format!("{}app/a.log", p.input_name_common_part),
-            format!("{}app/b.log", p.input_name_common_part),
-        ]
-    );
-
-    // A long name after a long common prefix is also clipped in the middle.
-    let long = "/var/log/app/0123456789abcdefghijklmnopqrstuvwxyz.log";
-    assert_eq!(
-        names(&[long, "/var/log/app/b.log"]),
-        vec![
-            format!(
-                "{}app/01234567{}opqrstuvwxyz.log",
-                p.input_name_common_part, p.input_name_clipping
-            ),
-            format!("{}app/b.log", p.input_name_common_part),
-        ]
-    );
-
-    // A long name with a short common prefix is clipped in the middle only.
-    let long = "0123456789abcdefghijklmnopqrstuvwxyz.log";
-    assert_eq!(
-        names(&[long, "b.log"]),
-        vec![
-            format!("0123456789ab{}stuvwxyz.log", p.input_name_clipping),
-            "b.log".to_owned(),
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_start_sets_offsets_only() {
-    // A new stream, such as a replaced file or a file seeked to its tail, has its
-    // own offsets, while block numbers keep counting to stay unique for the input.
-    let sfi = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sfi, Delimiter::default());
-    let (txi, rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), 3);
-
-    blocks
-        .scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi, false)
-        .unwrap();
-    blocks.start(0);
-    blocks.scan(&mut Cursor::new(b"b1\n".to_vec()), 0, &txi, false).unwrap();
-    blocks.start(100);
-    blocks.scan(&mut Cursor::new(b"c1\n".to_vec()), 0, &txi, false).unwrap();
-    drop(txi);
-
-    let scanned = rxi.iter().map(|(_, block, offset, _)| (block, offset)).collect_vec();
-    assert_eq!(scanned, vec![(0, 0), (1, 3), (2, 0), (3, 100)]);
-}
-
-#[test]
-fn test_sort_passes_record_origin_across_blocks() {
-    // A small buffer splits the input into several index blocks, so the offsets
-    // of later records include the block offsets.
-    let (app, capture) = app_with_origin_capture(Options {
-        buffer_size: NonZeroUsize::new(64).unwrap(),
-        ..options().with_sort(true)
-    });
-
-    let lines = (1..=4)
-        .map(|i| format!(r#"{{"ts":"2024-01-25T19:10:0{i}Z","msg":"m{i}"}}"#))
-        .collect_vec();
-    let mut output = Vec::new();
-    app.run(
-        vec![input(lines.iter().map(|x| format!("{x}\n")).join(""))],
-        &mut output,
-    )
-    .unwrap();
-
-    let n = lines[0].len() as u64;
-    let mut ranges = capture
-        .origins
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|x| x.1.clone())
-        .collect_vec();
-    ranges.sort_by_key(|x| x.start);
-    assert_eq!(ranges, (0..4).map(|i| i * (n + 1)..i * (n + 1) + n).collect_vec());
 }

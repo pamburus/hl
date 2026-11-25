@@ -86,52 +86,26 @@ If you have an idea for a new feature or enhancement, please [create a feature r
 
 ## Contributing Code
 
-We welcome code contributions! The rules in this section apply to every change, whether it is made by a person or by an AI agent.
-
-### Rules to Follow
-
-The project [constitution](.specify/memory/constitution.md) is mandatory and takes precedence over this document. Among other things, it defines where tests go, how test data is stored, and when JSON schemas must be updated. These guidelines describe the process in detail:
-
-- [Branches and Versioning](docs/guidelines/branches-and-versioning.md): which branch to target and how to bump the version
-- [Commits](docs/guidelines/commits.md): validation before committing, commit message content and issue references
+We welcome code contributions! Here's how to get started:
 
 ### Getting Started
 
 1. **Fork the repository** and create a new branch off `develop` for your changes
 2. **Set up your development environment** (see [Development Setup](#development-setup))
 3. **Make your changes** with clear, focused commits
-4. **Validate your changes** (see [Before Committing](#before-committing))
+4. **Test your changes** thoroughly
 5. **Submit a pull request** against `develop` with a clear description of your changes
 
-The `master` branch holds only the latest release and does not accept pull requests. Pull requests opened against it are moved to `develop` automatically.
+The `master` branch holds only the latest release and does not accept pull requests. Pull requests opened against it are moved to `develop` automatically. See [Branches and Versioning](docs/guidelines/branches-and-versioning.md) for details.
 
 ### Pull Request Guidelines
 
 - **Keep changes focused**: One feature or bug fix per pull request
 - **Follow existing code style**: Match the style of the existing codebase
-- **Write commit messages about user-visible behavior**: They follow Conventional Commits and generate the release notes, see [Commits](docs/guidelines/commits.md#commit-message-content)
-- **Close issues from the commit message**: End the message with a `Closes: #N` footer when the commit resolves issue N. The issue closes when the release containing the commit reaches `master`; a `Closes` line in the pull request description has no effect, because pull requests target `develop`
-- **Bump the version** when the change can affect the built program, see [Versioning of pull requests](docs/guidelines/branches-and-versioning.md#versioning-of-pull-requests)
+- **Write clear commit messages**: Describe what and why, not just how
 - **Update documentation**: If your changes affect user-facing behavior
 - **Add tests**: For new features or bug fixes when applicable
 - **Keep the PR description clear**: Explain the problem and your solution
-
-### Unrelated Issues
-
-If you find an issue that is unrelated to the current change (a bug, a flaky test, outdated documentation, a missing check), file it as a GitHub issue instead of fixing it in the current change:
-
-1. Search the existing issues first and comment on a matching issue instead of opening a duplicate.
-2. Otherwise, open a new issue. Describe what you observed, how to reproduce it, and where in the code it happens (file and line), so it can be picked up without the context of the current change.
-
-The unrelated issue gets its own branch and pull request.
-
-### Performance
-
-The `perf-gate` CI job compares the instruction counts of the pull request with those of its base, and fails when they grow by more than 1%. Run `just perf-gate` to get the same comparison locally. For a change that adds cost on purpose, a maintainer adds the `perf-regression-accepted` label. See [perf-gate.py](scripts/README.md#perf-gatepy) for details.
-
-Instruction counts do not show effects of caches, memory access or threads, so wall-clock time is measured with the benchmarks, locally only, because timings on shared CI runners vary too much. Run `just bench-compare` to compare the benchmarks of the working tree with where it forked from `origin/develop`. A criterion filter narrows it down, for example `just bench-compare origin/develop timestamp`. It skips the reference benchmarks, which measure third-party code and language or library primitives. Run it on an otherwise idle machine. See [bench-compare.py](scripts/README.md#bench-comparepy) for details.
-
-For a performance-sensitive change, run `just bench-compare` once the review has settled and the pull request is ready to merge, and post its summary in the pull request.
 
 ### Code Review Process
 
@@ -141,13 +115,11 @@ For a performance-sensitive change, run `just bench-compare` once the review has
 
 ## Development Setup
 
-hl is written in Rust. The common tasks are [just](https://just.systems) recipes, which install the tools they need on first use. Run `just` to list them.
+hl is written in Rust. Here's how to set up your development environment:
 
 ### Prerequisites
 
-- [Rust](https://rustup.rs/) via rustup, which picks the toolchain from `rust-toolchain.toml`; formatting additionally uses the nightly toolchain
-- [just](https://just.systems/man/en/packages.html)
-- [uv](https://docs.astral.sh/uv/getting-started/installation/), for `just bench-compare`
+- [Rust](https://rustup.rs/) (latest stable version recommended)
 - A Rust-compatible IDE or editor (VS Code with rust-analyzer, IntelliJ IDEA, etc.)
 
 ### Building from Source
@@ -158,50 +130,56 @@ git clone https://github.com/YOUR_USERNAME/hl.git
 cd hl
 
 # Build the project
-just build
+cargo build
+
+# Run tests
+cargo test
 
 # Run hl
-just run --help
+cargo run -- --help
 ```
 
 ### Running Tests
 
 ```bash
 # Run all tests
-just test
+cargo test
 
-# Run the tests whose names contain the given text, with output
-just test test-name -- --nocapture
+# Run tests with output
+cargo test -- --nocapture
+
+# Run a specific test
+cargo test test_name
 ```
 
 ### Running Benchmarks
 
 ```bash
-just bench
+cargo bench
 ```
 
 ## Code Style
 
-- Format the code with `just fmt`. Rust code is formatted with nightly `rustfmt`, because `rustfmt.toml` uses unstable options; stable `cargo fmt` ignores them, including the exclusion of generated code
-- Resolve all Clippy warnings; `just lint` runs Clippy on all targets with warnings denied
+- Follow Rust's official [style guidelines](https://doc.rust-lang.org/1.0.0/style/)
+- Use `cargo fmt` to format your code before committing
+- Use `cargo clippy` to catch common mistakes and improve your code
 - Write clear, descriptive variable and function names
 - Add comments for complex logic or non-obvious behavior
 
 ### Before Committing
 
-Run all checks of the CI workflow locally and resolve everything they report:
+Run these commands to ensure your code meets the project's standards:
 
 ```bash
-just ci
+# Format code
+cargo fmt
+
+# Check for common mistakes
+cargo clippy
+
+# Run tests
+cargo test
 ```
-
-After a change to the code, also check that the changed lines are covered by tests:
-
-```bash
-just uncovered
-```
-
-See [Validation](docs/guidelines/commits.md#validation) for what `just ci` runs.
 
 ## Questions?
 

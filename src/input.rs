@@ -134,55 +134,12 @@ impl InputReference {
         }
     }
 
-    /// Returns the name of the input as shown to the user.
-    pub fn name(&self) -> String {
-        match self {
-            Self::Stdin => "<stdin>".to_owned(),
-            Self::File(path) => path.original.to_string_lossy().into_owned(),
-        }
-    }
-
     #[inline]
     fn path(&self) -> Option<&PathBuf> {
         match self {
             Self::Stdin => None,
             Self::File(path) => Some(&path.canonical),
         }
-    }
-}
-
-// ---
-
-/// Describes an input of a run, for the records that come from it.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct InputDescriptor {
-    /// The position of the input in the list of inputs.
-    pub index: usize,
-    /// The name of the input as shown to the user.
-    pub name: String,
-}
-
-impl InputDescriptor {
-    /// Creates a new input descriptor.
-    pub fn new(index: usize, name: impl Into<String>) -> Self {
-        Self {
-            index,
-            name: name.into(),
-        }
-    }
-}
-
-impl From<(usize, String)> for InputDescriptor {
-    /// Creates a descriptor from an index and a name, as produced by enumerating input names.
-    fn from((index, name): (usize, String)) -> Self {
-        Self::new(index, name)
-    }
-}
-
-impl<'a> From<(usize, &'a InputReference)> for InputDescriptor {
-    /// Creates a descriptor from an index and an input reference, as produced by enumerating inputs.
-    fn from((index, input): (usize, &'a InputReference)) -> Self {
-        (index, input.name()).into()
     }
 }
 
@@ -250,18 +207,6 @@ impl InputHolder {
     /// Creates a new input holder.
     pub fn new(reference: InputReference, stream: Option<InputStream>) -> Self {
         Self { reference, stream }
-    }
-
-    /// Returns the metadata of the held stream, or of the referenced file if no stream is held.
-    ///
-    /// The metadata of the held stream describes the file it was opened from, even if
-    /// that file has since been renamed and another one created at its path.
-    pub fn metadata(&self) -> io::Result<Option<Metadata>> {
-        match (&self.stream, &self.reference) {
-            (Some(stream), _) => stream.metadata(),
-            (None, InputReference::File(path)) => fs::metadata(&path.canonical).map(Some),
-            (None, InputReference::Stdin) => Ok(None),
-        }
     }
 
     /// Opens the input file for reading.
@@ -334,15 +279,6 @@ impl Input {
         InputReference::Stdin.open()
     }
 
-    /// Returns the byte position reading starts from, so it must be called before reading.
-    /// A sequential stream is never seeked, so it is taken to start from zero.
-    pub fn position(&mut self) -> io::Result<u64> {
-        match &mut self.stream {
-            Stream::Sequential(_) => Ok(0),
-            Stream::RandomAccess(stream) => stream.stream_position(),
-        }
-    }
-
     /// Seeks to the last `entries` entries of the input.
     pub fn tail(mut self, entries: u64, delimiter: Delimiter) -> io::Result<Self> {
         match &mut self.stream {
@@ -383,11 +319,10 @@ impl Input {
                 r = i.start;
             }
 
-            if r != 0
-                && pos != 0
-                && let Some(i) = searcher.partial_match_r(&buf[..r])
-            {
-                pos += i as u64;
+            if r != 0 && pos != 0 {
+                if let Some(i) = searcher.partial_match_r(&buf[..r]) {
+                    pos += i as u64;
+                }
             }
         }
         stream.seek(SeekFrom::Start(pos))?;

@@ -428,12 +428,7 @@ where
             // spawn reader thread
             let reader = scope.spawn(closure!(clone sfi, |_| -> Result<()> {
                 let scanner = Scanner::new(sfi, &self.delimiter);
-                // The empty last part of an entry that ends right after a whole part adds no block.
-                let items = scanner
-                    .items(input)
-                    .with_max_segment_size(self.max_message_size.try_into()?)
-                    .filter(|item| !matches!(item, Ok(Segment::Incomplete(segment, ..)) if segment.data().is_empty()));
-                for (sn, item) in items.enumerate() {
+                for (sn, item) in scanner.items(input).with_max_segment_size(self.max_message_size.try_into()?).enumerate() {
                     if txi[sn % n].send((sn, item?)).is_err() {
                         break;
                     }
@@ -442,7 +437,7 @@ where
             }));
             // spawn processing threads
             for (rxi, txo) in izip!(rxi, txo) {
-                scope.spawn(closure!(ref existing_index, |_| {
+                scope.spawn(closure!(ref sfi, ref existing_index, |_| {
                     for (sn, segment) in rxi.iter() {
                         let (stat, chronology, segment, hash) = match segment {
                             Segment::Complete(segment) => {
@@ -453,14 +448,14 @@ where
                                     .unwrap_or_else(|| self.process_segment(&segment));
                                 (stat, chronology, segment, Some(hash))
                             }
-                            Segment::Incomplete(segment, ..) => {
+                            Segment::Incomplete(segment, _) => {
                                 let mut stat = Stat::new();
                                 stat.add_invalid();
                                 (stat, Chronology::default(), segment, None)
                             }
                         };
                         let size = segment.data().len();
-                        drop(segment);
+                        sfi.recycle(segment);
                         if txo.send((size, stat, chronology, hash)).is_err() {
                             break;
                         };
@@ -484,10 +479,13 @@ where
                 let mut sn = 0;
                 while let Ok((size, stat, chronology, hash)) = rxo[sn % n].recv() {
                     index.source.stat.merge(&stat);
-                    index
-                        .source
-                        .blocks
-                        .push(SourceBlock::new(offset, size.try_into()?, stat, chronology, hash));
+                    index.source.blocks.push(SourceBlock::new(
+                        offset,
+                        size.try_into()?,
+                        stat,
+                        chronology,
+                        hash,
+                    ));
                     offset += u64::try_from(size)?;
                     sn += 1;
                 }
@@ -574,11 +572,11 @@ where
                             jumps: jumps.len().try_into().unwrap(),
                         });
                     }
-                    if let Some(prev) = prev
-                        && line.1 != prev + 1
-                    {
-                        mask |= 1 << i;
-                        jumps.push(line.2);
+                    if let Some(prev) = prev {
+                        if line.1 != prev + 1 {
+                            mask |= 1 << i;
+                            jumps.push(line.2);
+                        }
                     }
                     prev = Some(line.1);
                 }
@@ -1190,7 +1188,7 @@ fn level_mask_higher_or_eq(flag: u64) -> u64 {
 }
 
 const VALID_MAGIC: u64 = 0x484c2d494e444558;
-const CURRENT_VERSION: u64 = 5;
+const CURRENT_VERSION: u64 = 4;
 
 /*
 ---

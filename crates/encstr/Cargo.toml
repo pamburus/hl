@@ -9,6 +9,3 @@ workspace = "../.."
 
 [dependencies]
 memchr.workspace = true
-
-[dev-dependencies]
-rstest.workspace = true

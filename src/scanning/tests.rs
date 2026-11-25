@@ -1,18 +1,10 @@
-use std::io::{self, Cursor, Read};
+use std::io::Cursor;
 use std::sync::Arc;
 
 use rstest::rstest;
 
 use super::json::JsonDelimitSearcher;
 use super::*;
-
-struct FailingReader;
-
-impl Read for FailingReader {
-    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::other("read error"))
-    }
-}
 
 #[test]
 fn test_empty() {
@@ -212,135 +204,6 @@ fn test_substr_search_r() {
     assert_eq!(searcher.search_r(input, true), None);
 }
 
-#[rstest]
-fn test_search_r_incremental_matches_search_r(
-    #[values(
-        Delimiter::Byte(b'\n'),
-        Delimiter::Str("\r\n".into()),
-        Delimiter::Str("{x{".into()),
-        Delimiter::Newline,
-        Delimiter::Json,
-        Delimiter::PrettyCompatible
-    )]
-    delimiter: Delimiter,
-) {
-    // Every buffer of up to 5 bytes of characters that each delimiter depends on, grown byte by byte
-    // until a delimiter is found, and grown from each of those prefixes to its full length at once,
-    // gets the same result as a search of it all.
-    const ALPHABET: &[u8] = b"{}[]:,\n\r\t x";
-    const MAX_LEN: u32 = 5;
-
-    // Boxed, to go through each of the searchers that pass the search on.
-    let searcher: Box<dyn Search> = Box::new(delimiter.into_searcher());
-    for len in 0..=MAX_LEN {
-        for n in 0..ALPHABET.len().pow(len) {
-            let buf = (0..len)
-                .scan(n, |n, _| {
-                    let c = ALPHABET[*n % ALPHABET.len()];
-                    *n /= ALPHABET.len();
-                    Some(c)
-                })
-                .collect::<Vec<_>>();
-            let mut progress = SearchProgress::default();
-            for k in 0..=buf.len() {
-                let mut jumped = progress;
-                assert_eq!(
-                    searcher.search_r_incremental(&buf, &mut jumped),
-                    searcher.search_r(&buf, true),
-                    "buffer {:?} grown from {k}",
-                    String::from_utf8_lossy(&buf),
-                );
-                let found = searcher.search_r_incremental(&buf[..k], &mut progress);
-                assert_eq!(
-                    found,
-                    searcher.search_r(&buf[..k], true),
-                    "buffer {:?} grown to {k}",
-                    String::from_utf8_lossy(&buf),
-                );
-                if found.is_some() {
-                    // A search that finds a delimiter leaves the progress as it was.
-                    assert_eq!(
-                        searcher.search_r_incremental(&buf[..k], &mut progress),
-                        found,
-                        "buffer {:?} grown to {k} and searched again",
-                        String::from_utf8_lossy(&buf),
-                    );
-                    break;
-                }
-            }
-        }
-    }
-}
-
-#[rstest]
-fn test_json_search_r_incremental_skips_searched_whitespace(
-    #[values(" ", "\t", "\r", " \t\r")] blank: &str,
-    #[values(1, 3, 4096)] chunk: usize,
-) {
-    // The whitespace after a closing brace, searched while the buffer grows, is not read again
-    // by the next searches, so that a growing run of it costs no more than its length in total.
-    let blanks = blank.repeat(16384 / blank.len());
-    let mut buf = format!("{{\"a\":1}}{blanks}").into_bytes();
-    let mut progress = SearchProgress::default();
-    for end in (1..buf.len()).step_by(chunk).chain([buf.len()]) {
-        assert_eq!(
-            JsonDelimitSearcher.search_r_incremental(&buf[..end], &mut progress),
-            None
-        );
-    }
-
-    let grown = buf.len();
-    buf.extend_from_slice(b"\nx");
-    let expected = JsonDelimitSearcher.search_r(&buf, true);
-    assert_eq!(expected, Some(7..grown + 1));
-
-    // Replaced with what keeps the brace from ending a delimiter, to tell whether it is read again.
-    buf[7..grown].fill(b'x');
-    assert_eq!(JsonDelimitSearcher.search_r_incremental(&buf, &mut progress), expected);
-}
-
-#[rstest]
-#[case::byte(Delimiter::Byte(b'\n'), b"\n")]
-#[case::str(Delimiter::Str("\r\n".into()), b"\r\n")]
-#[case::newline(Delimiter::Newline, b"\n")]
-#[case::pretty_compatible(Delimiter::PrettyCompatible, b"\n")]
-fn test_search_r_incremental_skips_searched_data(
-    #[case] delimiter: Delimiter,
-    #[case] pattern: &[u8],
-    #[values(1, 3, 4096)] chunk: usize,
-) {
-    // The data searched while the buffer grows is not read again by the next searches,
-    // so that a growing line costs no more than its length in total.
-    let searcher = delimiter.into_searcher();
-    let mut buf = vec![b'x'; 16384];
-    let mut progress = SearchProgress::default();
-    for end in (1..buf.len()).step_by(chunk).chain([buf.len()]) {
-        assert_eq!(searcher.search_r_incremental(&buf[..end], &mut progress), None);
-    }
-
-    // Replaced with a delimiter, to tell whether it is read again.
-    buf[..pattern.len()].copy_from_slice(pattern);
-    buf.push(b'x');
-    assert!(searcher.search_r(&buf, true).is_some());
-    assert_eq!(searcher.search_r_incremental(&buf, &mut progress), None);
-}
-
-#[rstest]
-#[case::fitting(2, b"x", b"abx")]
-#[case::filling(3, b"x", b"abcx")]
-#[case::growing(3, b"xy", b"abcxy")]
-#[case::growing_full(4, b"x", b"abcdx")]
-#[case::growing_more(4, b"xyz", b"abcdxyz")]
-fn test_segment_buf_extend_from_slice(#[case] len: usize, #[case] data: &[u8], #[case] expected: &[u8]) {
-    let sf = Arc::new(SegmentBufFactory::new(4));
-    let mut buf = sf.new_segment();
-    buf.extend_from_slice(&b"abcd"[..len]);
-    buf.extend_from_slice(data);
-    assert_eq!(buf.data(), expected);
-    // The buffer grows only as much as needed, as it is not extended again.
-    assert_eq!(buf.buf.capacity(), expected.len().max(4));
-}
-
 #[test]
 fn test_small_token() {
     let sf = Arc::new(SegmentBufFactory::new(20));
@@ -448,15 +311,15 @@ fn test_jumbo_0() {
     assert_eq!(
         tokens,
         vec![
-            Segment::Incomplete(b"tes".into(), PartialPlacement::First, 0),
-            Segment::Incomplete(b"t/:".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"tok".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"en/".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b":ve".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"ry/".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b":la".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"rge".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"/:".into(), PartialPlacement::Last, 0),
+            Segment::Incomplete(b"tes".into(), PartialPlacement::First),
+            Segment::Incomplete(b"t/:".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"tok".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"en/".into(), PartialPlacement::Next),
+            Segment::Incomplete(b":ve".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"ry/".into(), PartialPlacement::Next),
+            Segment::Incomplete(b":la".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"rge".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"/:".into(), PartialPlacement::Last),
         ]
     )
 }
@@ -496,131 +359,23 @@ fn test_jumbo_smart_new_line_2() {
     assert_eq!(
         tokens,
         vec![
-            Segment::Incomplete(b"tes".into(), PartialPlacement::First, 0),
-            Segment::Incomplete(b"t t".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"oke".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"n\r\n".into(), PartialPlacement::Last, 2),
+            Segment::Incomplete(b"tes".into(), PartialPlacement::First),
+            Segment::Incomplete(b"t t".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"oke".into(), PartialPlacement::Next),
+            Segment::Incomplete(b"n\r\n".into(), PartialPlacement::Last),
             Segment::Complete(b"eof\r\n".into()),
         ]
     )
 }
 
-#[rstest]
-#[case::open_inside_token(false, b"abcdefg", &[Segment::Incomplete(b"abc".into(), PartialPlacement::First, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"g".into(), PartialPlacement::Next, 0)])]
-#[case::open_after_token(false, b"abcdef\n", &[Segment::Complete(b"abcdef\n".into())])]
-#[case::continuing_to_delimiter(true, b"ab\ncd\n", &[Segment::Incomplete(b"ab\n".into(), PartialPlacement::Last, 1), Segment::Complete(b"cd\n".into())])]
-#[case::continuing_open(true, b"abcdef", &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0)])]
-fn test_jumbo_open_ended(#[case] continuing: bool, #[case] input: &[u8], #[case] expected: &[Segment]) {
-    let sf = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sf.clone(), b'\n');
-    let mut data = Cursor::new(input);
-    let items = scanner
-        .items(&mut data)
-        .continuing(continuing)
-        .open_ended(true)
-        .with_max_segment_size(100);
-    let tokens = items.collect::<Result<Vec<_>>>().unwrap();
-    assert_eq!(tokens, expected);
-}
-
 #[test]
-fn test_jumbo_not_open_ended() {
-    let sf = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sf.clone(), b'\n');
-    let mut data = Cursor::new(b"abcdefg");
-    let items = scanner.items(&mut data).continuing(true).with_max_segment_size(100);
-    let tokens = items.collect::<Result<Vec<_>>>().unwrap();
-    assert_eq!(
-        tokens,
-        vec![
-            Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"g".into(), PartialPlacement::Last, 0),
-        ]
-    );
-}
-
-#[rstest]
-#[case::too_long(false, 4, &[Segment::Incomplete(b"abc".into(), PartialPlacement::First, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"".into(), PartialPlacement::Last, 0)])]
-#[case::continuing(true, 100, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"".into(), PartialPlacement::Last, 0)])]
-#[case::continuing_at_limit(true, 6, &[Segment::Incomplete(b"abc".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0), Segment::Incomplete(b"".into(), PartialPlacement::Last, 0)])]
-#[case::fits(false, 7, &[Segment::Complete(b"abcdef".into())])]
-#[case::fits_exactly(false, 6, &[Segment::Complete(b"abcdef".into())])]
-fn test_jumbo_ends_on_buffer_boundary(
-    #[case] continuing: bool,
-    #[case] max_segment_size: usize,
-    #[case] expected: &[Segment],
-) {
-    let sf = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sf.clone(), b'\n');
-    let mut data = Cursor::new(b"abcdef");
-    let items = scanner
-        .items(&mut data)
-        .continuing(continuing)
-        .with_max_segment_size(max_segment_size);
-    let tokens = items.collect::<Result<Vec<_>>>().unwrap();
-    assert_eq!(tokens, expected);
-}
-
-#[test]
-fn test_jumbo_reaches_limit_before_last_part() {
-    let sf = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sf.clone(), b'\n');
-    let mut data = Cursor::new(b"abcdefg\nx\n");
-    let tokens = scanner
-        .items(&mut data)
-        .with_max_segment_size(6)
-        .collect::<Result<Vec<_>>>()
-        .unwrap();
-    assert_eq!(
-        tokens,
-        vec![
-            Segment::Incomplete(b"abc".into(), PartialPlacement::First, 0),
-            Segment::Incomplete(b"def".into(), PartialPlacement::Next, 0),
-            Segment::Incomplete(b"g\n".into(), PartialPlacement::Last, 1),
-            Segment::Complete(b"x\n".into()),
-        ]
-    );
-}
-
-#[test]
-fn test_segment_buf_from_vec_keeps_the_allocation() {
-    let data = b"abcdefg\n".to_vec();
-    let ptr = data.as_ptr();
-    let buf = SegmentBuf::from(data);
-    assert_eq!(buf.data(), b"abcdefg\n");
-    let data = buf.into_data();
-    assert_eq!(data.as_ptr(), ptr);
-}
-
-#[test]
-fn test_segment_buf_from_slice_copies() {
-    let data = b"abcdefg\n".to_vec();
-    let buf = SegmentBuf::from(data.as_slice());
-    assert_eq!(buf.data(), b"abcdefg\n");
-    let copy = buf.into_data();
-    assert_ne!(copy.as_ptr(), data.as_ptr());
-}
-
-#[test]
-fn test_jumbo_joined_entry_is_sized_exactly() {
-    let sf = Arc::new(SegmentBufFactory::new(3));
-    let scanner = Scanner::new(sf.clone(), b'\n');
-    let mut data = Cursor::new(b"abcdefg\nx\n");
-    let mut tokens = scanner
-        .items(&mut data)
-        .with_max_segment_size(16)
-        .collect::<Result<Vec<_>>>()
-        .unwrap()
-        .into_iter();
-    let joined = match tokens.next() {
-        Some(Segment::Complete(joined)) => joined.into_data(),
-        other => panic!("expected a complete segment, got {:?}", other),
-    };
-    assert_eq!(joined, b"abcdefg\n");
-    // The Vec itself, not SegmentBuf::capacity (the buffer's length): allocated once at its exact size.
-    assert_eq!(joined.capacity(), joined.len());
-    assert_eq!(tokens.next(), Some(Segment::Complete(b"x\n".into())));
+fn test_buf_factory_recycle() {
+    let factory = BufFactory::new(10);
+    let mut buf = factory.new_buf();
+    buf.extend_from_slice(b"test");
+    factory.recycle(buf);
+    let buf = factory.new_buf();
+    assert_eq!(buf, b"");
 }
 
 #[test]
@@ -948,82 +703,4 @@ fn test_partial_match_r_position_semantics() {
         assert_eq!(length, 2);
         assert_eq!(&buf[bs - length..bs], b"ab");
     }
-}
-
-#[rstest]
-#[case::newline(Delimiter::Newline, b"abcdefghij\nx\n", b"ij\n", 1)]
-#[case::crlf(Delimiter::Newline, b"abcdefghij\r\nx\n", b"ij\r\n", 2)]
-#[case::unterminated(Delimiter::Newline, b"abcdefghij", b"ij", 0)]
-#[case::json_after_object(Delimiter::Json, b"{\"a\":\"bcdefg\"}\n{}\n", b"defg\"}\n", 1)]
-#[case::json_before_object(Delimiter::Json, b"abcdefghij\n{}\n", b"ij\n", 1)]
-#[case::json_before_indented_object(Delimiter::Json, b"abcdefghij\n  {}\n", b"ij\n  ", 3)]
-fn test_last_part_delimiter(
-    #[case] delimiter: Delimiter,
-    #[case] input: &[u8],
-    #[case] expected: &[u8],
-    #[case] expected_delimiter: usize,
-) {
-    let sf = Arc::new(SegmentBufFactory::new(8));
-    let scanner = Scanner::new(sf, delimiter);
-    let mut data = Cursor::new(input);
-    let last = scanner.items(&mut data).find_map(|item| match item.unwrap() {
-        Segment::Incomplete(buf, PartialPlacement::Last, delimiter) => Some((buf, delimiter)),
-        _ => None,
-    });
-    assert_eq!(last, Some((SegmentBuf::from(expected), expected_delimiter)));
-}
-
-#[test]
-fn test_tokens_after_long_token() {
-    let sf = Arc::new(SegmentBufFactory::new(8));
-    let scanner = Scanner::new(sf.clone(), b'/');
-    let mut data = std::io::Cursor::new(b"abcdefghij/x/y/z");
-    let tokens = scanner.items(&mut data).collect::<Result<Vec<_>>>().unwrap();
-    assert_eq!(
-        tokens,
-        vec![
-            Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First, 0),
-            Segment::Incomplete(b"ij/".into(), PartialPlacement::Last, 1),
-            Segment::Complete(b"x/y/".into()),
-            Segment::Complete(b"z".into()),
-        ]
-    )
-}
-
-#[test]
-fn test_tokens_after_long_token_without_more_input() {
-    let sf = Arc::new(SegmentBufFactory::new(8));
-    let scanner = Scanner::new(sf.clone(), b'/');
-    let mut data = Cursor::new(b"abcdefghij/x/y/").chain(FailingReader);
-    let mut tokens = scanner.items(&mut data);
-    assert_eq!(
-        tokens.next().unwrap().unwrap(),
-        Segment::Incomplete(b"abcdefgh".into(), PartialPlacement::First, 0)
-    );
-    assert_eq!(
-        tokens.next().unwrap().unwrap(),
-        Segment::Incomplete(b"ij/".into(), PartialPlacement::Last, 1)
-    );
-    assert_eq!(tokens.next().unwrap().unwrap(), Segment::Complete(b"x/y/".into()));
-    assert!(tokens.next().unwrap().is_err());
-}
-
-#[test]
-fn test_jumbo_tokens_after_long_token() {
-    let sf = Arc::new(SegmentBufFactory::new(8));
-    let scanner = Scanner::new(sf.clone(), Newline);
-    let mut data = Cursor::new(b"abcdefghij\r\nx\r\ny\n");
-    let tokens = scanner
-        .items(&mut data)
-        .with_max_segment_size(16)
-        .collect::<Result<Vec<_>>>()
-        .unwrap();
-    assert_eq!(
-        tokens,
-        vec![
-            Segment::Complete(b"abcdefghij\r\n".into()),
-            Segment::Complete(b"x\r\n".into()),
-            Segment::Complete(b"y\n".into()),
-        ]
-    )
 }

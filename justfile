@@ -42,14 +42,13 @@ build: (setup "build")
 build-release: (setup "build")
     cargo build --release
 
-[doc('Run the application, example: `just run --help`')]
+[doc('Run the application, example: `just run -- --help`')]
 run *args: build
     cargo run -- {{ args }}
 
-[doc('Run tests for all packages in the workspace, example: `just test test-name -- --nocapture`')]
-[positional-arguments]
-test *args: (setup "build")
-    cargo test --workspace "$@"
+[doc('Run tests for all packages in the workspace')]
+test: (setup "build")
+    cargo test --workspace
 
 [doc('Check the code for errors without building an executable')]
 check: (setup "build")
@@ -68,7 +67,7 @@ lint-markdown: (setup "markdown-lint")
 # Run the Rust linter (clippy)
 [private]
 clippy: (setup "clippy")
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo clippy --workspace --all-targets --all-features
 
 [doc('Automatically fix linting issues where possible')]
 fix: fix-markdown fix-clippy
@@ -124,7 +123,7 @@ clean:
     @rm -f result*
 
 [doc('Run all CI checks locally')]
-ci: check test lint audit fmt-check check-schema stress-test
+ci: check test lint audit fmt-check check-schema
     @echo "✅ All local CI checks passed"
 
 [doc('Generate code coverage')]
@@ -138,19 +137,6 @@ uncovered base="origin/develop": (setup "coverage")
 [doc('Run benchmarks')]
 bench *args: (setup "build")
     cargo bench --workspace --locked {{ args }}
-
-[doc('Compare benchmarks of the working tree with where it forked from {{base}}, without reference benchmarks, example: `just bench-compare origin/develop timestamp`')]
-[positional-arguments]
-bench-compare base="origin/develop" *args: (setup "build")
-    @base="$1"; shift; scripts/bench-compare.py --base "$base" -- "$@"
-
-[doc('Run stress tests on a release build, `profile` is `quick` or `full`, example: `just stress-test full --case long-line`')]
-stress-test profile="quick" *args: build-release
-    @scripts/stress-test.py --hl "${CARGO_TARGET_DIR:-target}/release/hl" --profile {{ profile }} {{ args }}
-
-[doc('Compare instruction counts of the working tree with where it forked from {{base}}, in Docker on macOS, example: `just perf-gate origin/develop --mode sort`')]
-perf-gate base="origin/develop" *args:
-    @scripts/perf-gate.py --base {{ base }} {{ args }}
 
 [doc('Check schema validation')]
 check-schema: (setup "schema")

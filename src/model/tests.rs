@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::*;
 
 use chrono::TimeZone;
@@ -8,18 +6,6 @@ use rstest::rstest;
 use serde_logfmt::logfmt;
 
 use crate::settings::{Field, FieldShowOption};
-
-fn parse(s: &str) -> Record<'_> {
-    try_parse(s).unwrap()
-}
-
-fn try_parse(s: &str) -> Result<Record<'_>> {
-    let items = RawRecord::parser().parse(s.as_bytes()).collect_vec();
-    assert_eq!(items.len(), 1);
-    let raw = items.into_iter().next().unwrap()?.record;
-    let parser = Parser::new(ParserSettings::default());
-    Ok(parser.parse(&raw))
-}
 
 #[test]
 fn test_raw_record_parser_empty_line() {
@@ -834,6 +820,18 @@ fn test_logfmt_filter_include_absent(#[case] filter: &str, #[case] input: &str, 
     assert_eq!(filter.apply(&record), expected);
 }
 
+fn parse(s: &str) -> Record<'_> {
+    try_parse(s).unwrap()
+}
+
+fn try_parse(s: &str) -> Result<Record<'_>> {
+    let items = RawRecord::parser().parse(s.as_bytes()).collect_vec();
+    assert_eq!(items.len(), 1);
+    let raw = items.into_iter().next().unwrap()?.record;
+    let parser = Parser::new(ParserSettings::default());
+    Ok(parser.parse(&raw))
+}
+
 #[test]
 fn test_field_filter_regex_matching() {
     let filter = FieldFilter::parse("caller~~=source\\.py$").unwrap();
@@ -962,37 +960,4 @@ fn test_object_parser_invalid_type() {
     let obj = RawObject::Json(json::from_str(r#"12"#).unwrap());
     let result = obj.parse();
     assert!(matches!(result, Err(Error::JsonParseError(_))));
-}
-
-#[rstest]
-#[case::inserted("level", true)]
-#[case::same_length_and_first_byte("lever", true)]
-#[case::other_length("levels", false)]
-#[case::other_first_byte("bevel", false)]
-#[case::empty("", false)]
-#[case::long_same_first_byte(&"l".repeat(100), true)]
-fn test_key_filter(#[case] key: &str, #[case] expected: bool) {
-    let mut filter = KeyFilter::default();
-    filter.insert("level");
-    filter.insert(&"l".repeat(63));
-    assert_eq!(filter.may_contain(key), expected);
-}
-
-#[test]
-fn test_key_filter_empty_key() {
-    let mut filter = KeyFilter::default();
-    filter.insert("");
-    assert!(filter.may_contain(""));
-    assert!(!filter.may_contain("a"));
-}
-
-#[rstest]
-#[case::predefined("level", Some(Level::Error), 0)]
-#[case::passes_filter("lever", None, 1)]
-#[case::rejected_by_filter("bevel", None, 1)]
-fn test_parse_key_filter(#[case] key: &str, #[case] level: Option<Level>, #[case] fields: usize) {
-    let input = format!(r#"{{"{key}":"error"}}"#);
-    let rec = parse(&input);
-    assert_eq!(rec.level, level);
-    assert_eq!(rec.fields().count(), fields);
 }
