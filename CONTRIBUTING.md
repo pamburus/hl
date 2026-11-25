@@ -125,6 +125,29 @@ If you find an issue that is unrelated to the current change (a bug, a flaky tes
 
 The unrelated issue gets its own branch and pull request.
 
+### Bugs Found by New Tests
+
+When a test your change adds fails, and the bug it shows may be older than your change, check whether the bug is already on the branch your pull request targets: apply only the test on top of the commit your branch is based on, and run it there. If the test uses code that your change adds, rewrite it without that code for the check; if that is not possible, treat the bug as introduced by your change.
+
+- If the test passes there, your change introduces the bug, so fix it in the same pull request.
+- If the test fails there as well, the bug is pre-existing. Search the existing issues for it and, if it is not reported yet, [report it](#reporting-bugs) with the test as the steps to reproduce it. Mention the issue in your pull request, and mark the test as expected to fail, with a comment that links the issue, so that it does not block your pull request (see below).
+
+A test marked as expected to fail passes while it panics, and fails once it stops panicking, so the change that fixes the bug has to remove the mark, whether or not it refers to the issue:
+
+```rust
+#[test]
+// Fails because of https://github.com/pamburus/hl/issues/N.
+#[should_panic(expected = "the message of the failing assertion")]
+fn test_name() {
+    // ...
+}
+```
+
+- Narrow `expected` down to the message of the failing assertion, so that an unrelated panic does not count as the expected failure. If another assertion of the test could fail with the same message, give the failing one a message of its own.
+- A test that returns `Result` cannot have `#[should_panic]`; make it panic on the error instead, for example with `unwrap`.
+- For a bug on some platforms only, apply the mark on those platforms, for example `#[cfg_attr(windows, should_panic(expected = "..."))]`.
+- A bug that shows only at times, depending on timing, would make such a test flaky, and a bug that aborts the test process instead of panicking cannot be caught at all. Mark such a test with `#[ignore = "https://github.com/pamburus/hl/issues/N"]` instead, and remove the mark with the fix.
+
 ### Performance
 
 The `perf-gate` CI job compares the instruction counts of the pull request with those of its base, and fails when they grow by more than 1%. Run `just perf-gate` to get the same comparison locally. For a change that adds cost on purpose, a maintainer adds the `perf-regression-accepted` label. See [perf-gate.py](scripts/README.md#perf-gatepy) for details.
@@ -147,7 +170,8 @@ hl is written in Rust. The common tasks are [just](https://just.systems) recipes
 
 - [Rust](https://rustup.rs/) via rustup, which picks the toolchain from `rust-toolchain.toml`; formatting additionally uses the nightly toolchain
 - [just](https://just.systems/man/en/packages.html)
-- [uv](https://docs.astral.sh/uv/getting-started/installation/), for `just bench-compare`
+- [uv](https://docs.astral.sh/uv/getting-started/installation/), which runs the Python scripts under `scripts/`
+- [GitHub CLI](https://cli.github.com) (`gh`), authenticated with `gh auth login`
 - A Rust-compatible IDE or editor (VS Code with rust-analyzer, IntelliJ IDEA, etc.)
 
 ### Building from Source

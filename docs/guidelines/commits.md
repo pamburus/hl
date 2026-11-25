@@ -62,12 +62,25 @@ A commit that resolves an issue MUST end with a `Closes: #N` footer, one per res
 ```text
 fix(parser): handle timestamps with microsecond precision correctly
 
-Closes: #1234
+Closes: #N
 ```
 
 This is a valid Conventional Commits footer and a GitHub closing keyword. Pull requests target `develop` rather than the default branch, so a closing keyword in a pull request description has no effect. The footer closes the issue when the release workflow fast-forwards `master` to a release that contains the commit, which is when the change becomes available to users.
 
 Other footers, such as `Refs: #N` for related issues, MAY be added alongside it.
+
+A commit that fixes a regression not released yet SHOULD have a `Regressed-by: #N` footer when the cause is known, where N is the number of the pull request that landed the commit introducing the regression, not the hash of that commit. The pull request description links that pull request as well:
+
+```text
+fix(parser): handle empty keys in dotted paths again
+
+Regressed-by: #N
+Closes: #M
+```
+
+The release notes then list the pull request of the fix on the line of pull request N instead of on a line of its own, because users of releases never saw the regression. If N is not part of the same release, the fix gets its own line as usual.
+
+Because the fix gets no line of its own, a commit with a `Regressed-by` footer MUST contain only the fix of that regression. Other changes go to their own pull requests. A commit of another type than `fix` with the footer, which breaks this rule, keeps its own line in the release notes as well.
 
 Until the release, the `resolved` label marks open issues that commits on a release line close. To keep it accurate:
 

@@ -27,9 +27,34 @@ body = """
     {{- v -}}
 {%- endmacro -%}
 
-{%- macro bump_finalize(pkg, first_from, last_to, pr_numbers, author) -%}
+{#- Joins the pull requests of a line with the pull requests that fix regressions they introduced.
+    Each item of regressions is "<cause>><fix>", for example "#N>#M" for cause N and fix M. A fix of a fix is joined
+    too, because the commits are in order, so a fix comes after its cause. -#}
+{%- macro join_prs(prs, regressions) -%}
+    {%- set_global all = prs -%}
+    {%- for regression in regressions -%}
+        {%- set pair = regression | split(pat=">") -%}
+        {%- if pair | first in all -%}
+            {%- if pair | last not in all -%}
+                {%- set_global all = all | concat(with=pair | last) -%}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {{- all | join(sep=", ") -}}
+{%- endmacro -%}
+
+{#- Returns "#N" for a message that ends with "in #N", or an empty string otherwise. -#}
+{%- macro pr_of(message) -%}
+    {%- set parts = message | split(pat=" in #") -%}
+    {%- if parts | length == 2 -%}
+        {%- set pr_part = parts | last | trim | replace(from=")", to="") -%}
+        {{- "#" ~ pr_part -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro bump_finalize(pkg, first_from, last_to, pr_numbers, author, regressions) -%}
     {%- if pkg != "" -%}
-        {%- set joined_prs = pr_numbers | join(sep=", ") -%}
+        {%- set joined_prs = self::join_prs(prs=pr_numbers, regressions=regressions) -%}
         {%- set clean_from = self::strip_padding(version=first_from) -%}
         {%- set clean_to = self::strip_padding(version=last_to) -%}
         {%- if clean_from == clean_to -%}
@@ -40,14 +65,47 @@ body = """
     {%- endif -%}
 {%- endmacro -%}
 
-{%- macro dedup_finalize(prev_base, pr_numbers, prev_author) -%}
+{%- macro dedup_finalize(prev_base, pr_numbers, prev_author, regressions) -%}
     {%- if prev_base != "" -%}
-        {%- set joined_prs = pr_numbers | join(sep=", ") -%}
+        {%- set joined_prs = self::join_prs(prs=pr_numbers, regressions=regressions) -%}
         {{- self::add_commit(message=prev_base ~ " in " ~ joined_prs, author=prev_author) }}
     {%- endif -%}
 {% endmacro -%}
 
-{% for group, commits in commits | group_by(attribute="group") %}
+{#- A commit with a `Regressed-by: #N` footer, where pull request N is in this release, is listed on the line of
+    pull request N. A fix gets no line of its own; any other commit keeps its line, so that its change is not lost. -#}
+{%- set_global release_prs = [] -%}
+{%- for commit in commits -%}
+    {%- set pr_num = self::pr_of(message=commit.message) -%}
+    {%- if pr_num != "" -%}
+        {%- set_global release_prs = release_prs | concat(with=pr_num) -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- set_global regressions = [] -%}
+{%- set_global regression_fixes = [] -%}
+{%- for commit in commits -%}
+    {%- set fix_pr = self::pr_of(message=commit.message) -%}
+    {%- if fix_pr != "" -%}
+        {%- for footer in commit.footers | default(value=[]) -%}
+            {%- set cause = footer.value | trim -%}
+            {%- if footer.token == "Regressed-by" and cause in release_prs -%}
+                {%- set_global regressions = regressions | concat(with=cause ~ ">" ~ fix_pr) -%}
+                {%- if commit.group is containing("Fixed") -%}
+                    {%- set_global regression_fixes = regression_fixes | concat(with=fix_pr) -%}
+                {%- endif -%}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- set_global listed_commits = [] -%}
+{%- for commit in commits -%}
+    {%- set pr_num = self::pr_of(message=commit.message) -%}
+    {%- if pr_num == "" or pr_num not in regression_fixes -%}
+        {%- set_global listed_commits = listed_commits | concat(with=[commit]) -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{% for group, commits in listed_commits | group_by(attribute="group") %}
 ## {{ group | striptags | trim | upper_first }}
 
 {% set_global prev_pkg = "" -%}
@@ -64,8 +122,7 @@ body = """
         {%- set parts = commit.message | split(pat=" in #") -%}
         {%- if parts | length == 2 -%}
             {%- set base_msg = parts | first | trim -%}
-            {%- set pr_part = parts | last | trim -%}
-            {%- set pr_num = "#" ~ pr_part | replace(from=")", to="") -%}
+            {%- set pr_num = self::pr_of(message=commit.message) -%}
 
             {%- set bump_parts = base_msg | split(pat="bump ") -%}
             {%- if bump_parts | length >= 2 -%}
@@ -85,10 +142,10 @@ body = """
                             {%- set_global last_to_ver = to_ver -%}
                             {%- set_global bump_pr_numbers = bump_pr_numbers | concat(with=pr_num) -%}
                         {%- else -%}
-                            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author, regressions=regressions) }}
                             {%- set_global prev_base = "" -%}
                             {%- set_global pr_numbers = [] -%}
-                            {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                            {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author, regressions=regressions) }}
                             {%- set_global prev_pkg = pkg_name -%}
                             {%- set_global first_from_ver = from_ver -%}
                             {%- set_global last_to_ver = to_ver -%}
@@ -96,60 +153,68 @@ body = """
                             {%- set_global bump_author = commit.remote.username | default(value="") -%}
                         {%- endif -%}
                     {%- else -%}
-                        {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                        {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author, regressions=regressions) }}
                         {%- set_global prev_pkg = "" -%}
                         {%- set_global bump_pr_numbers = [] -%}
                         {%- if base_msg == prev_base -%}
                             {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
                         {%- else -%}
-                            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author, regressions=regressions) }}
                             {%- set_global prev_base = base_msg -%}
                             {%- set_global pr_numbers = [pr_num] -%}
                             {%- set_global prev_author = commit.remote.username | default(value="") -%}
                         {%- endif -%}
                     {%- endif -%}
                 {%- else -%}
-                    {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                    {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author, regressions=regressions) }}
                     {%- set_global prev_pkg = "" -%}
                     {%- set_global bump_pr_numbers = [] -%}
                     {%- if base_msg == prev_base -%}
                         {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
                     {%- else -%}
-                        {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                        {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author, regressions=regressions) }}
                         {%- set_global prev_base = base_msg -%}
                         {%- set_global pr_numbers = [pr_num] -%}
                         {%- set_global prev_author = commit.remote.username | default(value="") -%}
                     {%- endif -%}
                 {%- endif -%}
             {%- else -%}
-                {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+                {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author, regressions=regressions) }}
                 {%- set_global prev_pkg = "" -%}
                 {%- set_global bump_pr_numbers = [] -%}
                 {%- if base_msg == prev_base -%}
                     {%- set_global pr_numbers = pr_numbers | concat(with=pr_num) -%}
                 {%- else -%}
-                    {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+                    {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author, regressions=regressions) }}
                     {%- set_global prev_base = base_msg -%}
                     {%- set_global pr_numbers = [pr_num] -%}
                     {%- set_global prev_author = commit.remote.username | default(value="") -%}
                 {%- endif -%}
             {%- endif -%}
         {%- else -%}
-            {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
+            {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author, regressions=regressions) }}
             {%- set_global prev_pkg = "" -%}
             {%- set_global bump_pr_numbers = [] -%}
-            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+            {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author, regressions=regressions) }}
             {%- set_global prev_base = "" -%}
             {%- set_global pr_numbers = [] -%}
             {{- self::add_commit(message=commit.message, author=commit.remote.username | default(value="")) }}
         {%- endif -%}
     {%- endfor -%}
-    {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author) }}
-    {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author) }}
+    {{- self::bump_finalize(pkg=prev_pkg, first_from=first_from_ver, last_to=last_to_ver, pr_numbers=bump_pr_numbers, author=bump_author, regressions=regressions) }}
+    {{- self::dedup_finalize(prev_base=prev_base, pr_numbers=pr_numbers, prev_author=prev_author, regressions=regressions) }}
 
     {%- for commit in commits -%}
         {%- if not commit.scope -%}
-            {{ self::add_commit(message=commit.message, author=commit.remote.username | default(value="")) }}
+            {%- set parts = commit.message | split(pat=" in #") -%}
+            {%- if parts | length == 2 -%}
+                {%- set pr_num = self::pr_of(message=commit.message) -%}
+                {%- set joined_prs = self::join_prs(prs=[pr_num], regressions=regressions) -%}
+                {%- set base_msg = parts | first | trim -%}
+                {{ self::add_commit(message=base_msg ~ " in " ~ joined_prs, author=commit.remote.username | default(value="")) }}
+            {%- else -%}
+                {{ self::add_commit(message=commit.message, author=commit.remote.username | default(value="")) }}
+            {%- endif -%}
         {%- endif -%}
     {%- endfor %}
 {%- endfor %}
