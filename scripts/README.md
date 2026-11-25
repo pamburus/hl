@@ -98,6 +98,28 @@ HL_BENCH_REUSE_BASE=1 just bench-compare
 
 Requires [uv](https://docs.astral.sh/uv/), which runs the script.
 
+## wait-pr.py
+
+Waits until a pull request is merged into a target branch, or until something on it needs attention, so that an agent can wait for it in the background instead of polling by itself. It checks the pull request with `gh` right away, then after 15 seconds and at doubling intervals up to 15 minutes, for at most 24 hours. Between the checks, it waits with `gh event listen` and checks right away when a review is submitted, the state of the pull request changes, a check suite completes or a merge conflict appears. The scheduled checks still catch comments, which have no events, and events lost while the stream reconnects. When `gh event listen` fails, for example because event subscriptions, a preview of `gh`, are not enabled for the account, it sleeps until the next check instead, and tries to listen again after it. It is used in the procedure for [pre-existing bugs found by new tests](../AGENTS.md#pre-existing-bugs-found-by-new-tests).
+
+```bash
+# Wait for pull request PR to be merged into develop
+./scripts/wait-pr.py PR develop
+
+# Keep waiting after handling the activity it reported at the printed time
+./scripts/wait-pr.py PR develop --since 2026-11-25T10:00:00Z
+```
+
+It exits with:
+
+- 0 when the pull request is merged into the target branch
+- 1 when it is closed without being merged, or moved to another target branch
+- 2 when the timeout expires (`--timeout`, in seconds)
+- 3 when a review, a comment or a failed or cancelled check is newer than `--since`, or than the creation of the pull request when it is not given, and prints the time of that activity; or when the pull request has a merge conflict, and prints `conflict`
+- 4 on an error of the script itself, such as wrong arguments or a missing `gh`
+
+Requires uv and an authenticated `gh`.
+
 ## coverage-diff-analysis.py
 
 A comprehensive tool that compares test coverage between two Git commits to identify exactly which changed lines lack test coverage.
