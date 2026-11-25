@@ -1,15 +1,15 @@
 <!--
 Sync Impact Report:
-- Version: 2.2.0 → 2.3.0
+- Version: 2.3.0 → 2.4.0
 - Modified Sections:
-  - V. Test-First Development & Quality: Test Placement requirements now put the supporting code of a tests.rs module at its beginning, before the first test function.
+  - V. Test-First Development & Quality: Test Placement requirements now allow integration tests that run the `hl` binary, in one test binary under tests/integration/, with their shared helpers in tests/integration/support/.
 - Rationale: MINOR version bump. A new requirement is added; no principle is removed or redefined.
 - Templates requiring updates:
-  - ✅ plan-template.md: Compatible - no test layout steps
+  - ✅ plan-template.md: Compatible - its tests/integration/ example matches
   - ✅ spec-template.md: Compatible - no test layout steps
   - ✅ tasks-template.md: Compatible - test paths are given per task
 - Follow-up TODOs: none
-- Date: 2026-10-23
+- Date: 2026-11-25
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -64,8 +64,9 @@ This ensures new features are properly tested and maintains the high-quality bar
 - All tests of a module, including property-based tests, MUST be in a `tests.rs` file in the module's directory (`foo.rs` → `foo/tests.rs`), declared at the end of the module as `#[cfg(test)] mod tests;`
 - Test modules with other names or in other places MUST NOT be added
 - Test helpers shared by several modules belong in the `testing` module
+- Integration tests, which run the `hl` binary and use the OS, are the exception: they MUST be modules of the one test binary in `tests/integration/` (`tests/integration/main.rs`), one module per area, with the helpers they share in `tests/integration/support/`
 - Supporting code in a `tests.rs` file, such as helper functions, types, trait implementations and constants, MUST be placed at the beginning of the module, after the imports and before the first test function, never between test functions
-- All `tests.rs` files MUST be excluded from coverage reports, so that coverage measures only the code under test
+- All `tests.rs` files and the integration tests MUST be excluded from coverage reports, so that coverage measures only the code under test
 
 This keeps tests and their helpers easy to find and keeps test code from inflating coverage.
 
@@ -135,4 +136,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 2.3.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-10-23
+**Version**: 2.4.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-11-25
