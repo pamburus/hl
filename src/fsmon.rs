@@ -4,6 +4,13 @@ use std::path::PathBuf;
 // local imports
 use crate::error::Result;
 
+/// Temporary debug output to stderr.
+pub fn trace(args: std::fmt::Arguments) {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let t = START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64() * 1000.0;
+    eprintln!("[trace {} {:9.3}ms] {}", std::process::id(), t, args);
+}
+
 // ---
 
 /// A change of a watched file.

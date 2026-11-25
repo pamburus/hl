@@ -687,11 +687,15 @@ impl App {
                         if process(&mut input, is_file(&meta))? {
                             return Ok(())
                         }
+                        fsmon::trace(format_args!("follow start"));
                         fsmon::run(vec![path.canonical.clone()], |change| {
+                            fsmon::trace(format_args!("handle {change:?} input={}", input.is_some()));
                             match change {
                                 Change::Modified => {
+                                    fsmon::trace(format_args!("metadata {:?}", fs::metadata(&path.canonical).map(|m| m.len())));
                                     if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
                                         let replaced = old_meta.len() > new_meta.len() || old_meta.file_id() != new_meta.file_id();
+                                        fsmon::trace(format_args!("meta old_len={} new_len={} replaced={replaced}", old_meta.len(), new_meta.len()));
                                         if replaced && input.is_some() {
                                             // The rest of the old file will not come, flush its tail.
                                             input = None;
@@ -701,6 +705,7 @@ impl App {
                                     }
                                     if input.is_none() {
                                         input = input_ref.open().ok();
+                                        fsmon::trace(format_args!("reopen ok={}", input.is_some()));
                                     }
                                     if process(&mut input, is_file(&meta))? {
                                         return Ok(())

@@ -95,6 +95,7 @@ where
             let _watcher = watcher;
             while let Ok(Ok(event)) = wrx.recv() {
                 let notify::Event { kind, paths, .. } = event;
+                super::trace(format_args!("notify {kind:?} {paths:?}"));
                 if let Some(change) = Change::from_kind(&kind)
                     && tx.send((change, paths)).is_err()
                 {
@@ -135,6 +136,9 @@ where
                 for state in &mut states {
                     match win_file_id::open_shared(&state.path).and_then(|f| win_file_id::query(&f)) {
                         Some(info) => {
+                            if !matches!(&state.seen, Seen::Present { id, size } if *id == info.id && *size == info.size) {
+                                super::trace(format_args!("poll present size={} new_id={}", info.size, !matches!(&state.seen, Seen::Present { id, .. } if *id == info.id)));
+                            }
                             let rotated = matches!(&state.seen, Seen::Present { id, .. } if *id != info.id);
                             let changed = match &state.seen {
                                 Seen::Never => false,
@@ -160,6 +164,7 @@ where
                         }
                         None => {
                             if matches!(state.seen, Seen::Present { .. }) {
+                                super::trace(format_args!("poll absent"));
                                 state.seen = Seen::Absent;
                                 state.estimator.on_change();
                                 if tx.send((Change::Removed, vec![state.path.clone()])).is_err() {
@@ -179,7 +184,10 @@ where
 
     loop {
         match rx.recv() {
-            Ok((change, paths)) => handle(change, &paths)?,
+            Ok((change, paths)) => {
+                super::trace(format_args!("recv {change:?} {paths:?}"));
+                handle(change, &paths)?
+            }
             Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
         }
     }

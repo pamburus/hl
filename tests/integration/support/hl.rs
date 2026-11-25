@@ -56,7 +56,7 @@ impl Hl {
 
     /// Returns whether a line containing `text` is printed before `deadline`.
     ///
-    /// Panics with the exit status if `hl` closes its output before.
+    /// Panics if `hl` closes its output before, with its exit status if it exits within 5 seconds.
     pub fn wait_line(&mut self, text: &str, deadline: Instant) -> bool {
         let output = self.output.as_ref().expect("the output is closed");
         loop {
@@ -64,9 +64,10 @@ impl Hl {
                 Ok(line) if line.contains(text) => return true,
                 Ok(_) => {}
                 Err(mpsc::RecvTimeoutError::Timeout) => return false,
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    panic!("hl closed its output and exited with {}", self.child.wait().unwrap())
-                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => match self.wait_exit(|| {}) {
+                    Some(status) => panic!("hl closed its output and exited with {status}"),
+                    None => panic!("hl closed its output but is still running"),
+                },
             }
         }
     }
@@ -75,8 +76,13 @@ impl Hl {
     ///
     /// A process that waits for input, such as one following a file, finds the output closed only when it prints
     /// again, so `poke` is called until it exits to make it print.
-    pub fn stop(&mut self, mut poke: impl FnMut()) -> Option<ExitStatus> {
+    pub fn stop(&mut self, poke: impl FnMut()) -> Option<ExitStatus> {
         self.output = None;
+        self.wait_exit(poke)
+    }
+
+    /// Returns the exit status of `hl`, unless it does not exit within 5 seconds, calling `poke` while it waits.
+    fn wait_exit(&mut self, mut poke: impl FnMut()) -> Option<ExitStatus> {
         (0..50).find_map(|_| {
             poke();
             thread::sleep(Duration::from_millis(100));

@@ -1,0 +1,26 @@
+# Temporary: runs the follow integration tests on Windows many times with debug output.
+name: follow-debug
+on:
+  pull_request:
+jobs:
+  follow:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        shell: bash
+        run: cargo test --test integration --no-run
+      - name: Run the follow tests repeatedly
+        shell: bash
+        run: |
+          failed=0
+          for i in $(seq 1 60); do
+            if ! cargo test -q --test integration follow:: -- --test-threads=1 > out.txt 2>&1; then
+              failed=$((failed+1))
+              echo "::group::iteration $i failed"
+              cat out.txt
+              echo "::endgroup::"
+            fi
+          done
+          echo "failed $failed of 60"
