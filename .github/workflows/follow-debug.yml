@@ -15,12 +15,12 @@ jobs:
         shell: bash
         run: |
           failed=0
-          for i in $(seq 1 60); do
-            if ! cargo test -q --test integration follow:: -- --test-threads=1 > out.txt 2>&1; then
+          for i in $(seq 1 100); do
+            if ! cargo test -q --test integration follow:: > out.txt 2>&1; then
               failed=$((failed+1))
               echo "::group::iteration $i failed"
               cat out.txt
               echo "::endgroup::"
             fi
           done
-          echo "failed $failed of 60"
+          echo "failed $failed of 100"
