@@ -33,7 +33,7 @@ body:
     id: expected-behavior
     attributes:
       label: Expected Behavior
-      description: What you expected to happen.
+      description: What you expected to happen. If a [specification](https://github.com/pamburus/hl/tree/master/specs) covers it, name the requirement.
       placeholder: Describe what you expected...
     validations:
       required: true

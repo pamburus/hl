@@ -30,7 +30,7 @@ To keep the issue tracker focused and organized, we use **Issues** for actionabl
 
 Use **Issues** for:
 
-- **Bug reports**: Something is broken or not working as documented
+- **Bug reports**: Something is broken or does not behave as its [specification](docs/guidelines/specifications.md#bug-reports) or documentation says, or the specification itself is defective
 - **Feature requests**: Concrete proposals for new features or enhancements
 
 ### When to Use Discussions
@@ -51,13 +51,14 @@ If you've found a bug, please [create a bug report](https://github.com/pamburus/
 1. **Search existing issues** to see if the bug has already been reported
 2. **Check Discussions** to see if others have encountered the same problem
 3. **Update to the latest version** of hl to see if the bug has been fixed
-4. **Try to reproduce** the bug with minimal steps
+4. **Check the [specifications](docs/guidelines/specifications.md#bug-reports)** of that version to see whether the behavior is a bug at all, or a request to change specified behavior
+5. **Try to reproduce** the bug with minimal steps
 
 ### What to Include in a Bug Report
 
 - **Clear description**: What is the bug?
 - **Steps to reproduce**: Detailed steps to reproduce the behavior
-- **Expected behavior**: What you expected to happen
+- **Expected behavior**: What you expected to happen, and, if you found a spec that covers the behavior, the requirement it violates or the defect of the spec itself
 - **Actual behavior**: What actually happened
 - **Environment details**:
   - hl version (`hl --version`)
@@ -94,6 +95,7 @@ The project [constitution](.specify/memory/constitution.md) is mandatory and tak
 
 - [Branches and Versioning](docs/guidelines/branches-and-versioning.md): which branch to target and how to bump the version
 - [Commits](docs/guidelines/commits.md): validation before committing, commit message content and issue references
+- [Specifications](docs/guidelines/specifications.md): keeping the specs in line with every change of behavior, and checking bug reports against them
 
 ### Getting Started
 
@@ -112,6 +114,7 @@ The `master` branch holds only the latest release and does not accept pull reque
 - **Write commit messages about user-visible behavior**: They follow Conventional Commits and generate the release notes, see [Commits](docs/guidelines/commits.md#commit-message-content)
 - **Close issues from the commit message**: End the message with a `Closes: #N` footer when the commit resolves issue N. The issue closes when the release containing the commit reaches `master`; a `Closes` line in the pull request description has no effect, because pull requests target `develop`
 - **Bump the version** when the change can affect the built program, see [Versioning of pull requests](docs/guidelines/branches-and-versioning.md#versioning-of-pull-requests)
+- **Update the specifications**: Every change of behavior, including a bug fix, leaves the specs under `specs/` describing the behavior after it, see [Specifications](docs/guidelines/specifications.md#behavior-changes)
 - **Update documentation**: If your changes affect user-facing behavior
 - **Add tests**: For new features or bug fixes when applicable
 - **Keep the PR description clear**: Explain the problem and your solution
@@ -120,14 +123,15 @@ The `master` branch holds only the latest release and does not accept pull reque
 
 If you find an issue that is unrelated to the current change (a bug, a flaky test, outdated documentation, a missing check), file it as a GitHub issue instead of fixing it in the current change:
 
-1. Search the existing issues first and comment on a matching issue instead of opening a duplicate.
-2. Otherwise, open a new issue. Describe what you observed, how to reproduce it, and where in the code it happens (file and line), so it can be picked up without the context of the current change.
+1. For a bug, check the [specifications](docs/guidelines/specifications.md#bug-reports) first to see whether it is one, and what to file instead if it is not.
+2. Search the existing issues and comment on a matching issue instead of opening a duplicate.
+3. Otherwise, open a new issue. Describe what you observed, how to reproduce it, and where in the code it happens (file and line), so it can be picked up without the context of the current change.
 
 The unrelated issue gets its own branch and pull request.
 
 ### Bugs Found by New Tests
 
-When a test your change adds fails, and the bug it shows may be older than your change, check whether the bug is already on the branch your pull request targets: apply only the test on top of the commit your branch is based on, and run it there. If the test uses code that your change adds, rewrite it without that code for the check; if that is not possible, treat the bug as introduced by your change.
+When a test your change adds fails, first check its expectation against the [specifications](docs/guidelines/specifications.md#bug-reports) as your change leaves them. If your change adds or updates the requirement the test checks, the test checks the new behavior, so the failure is in your change: fix it in the same pull request. If the check shows that the behavior follows a sound spec, or is otherwise not a bug, fix the test. Otherwise, when the bug the test shows may be older than your change, check whether the bug is already on the branch your pull request targets: apply only the test on top of the commit your branch is based on, and run it there. If the test uses code that your change adds, rewrite it without that code for the check; if that is not possible, treat the bug as introduced by your change.
 
 - If the test passes there, your change introduces the bug, so fix it in the same pull request.
 - If the test fails there as well, the bug is pre-existing. Search the existing issues for it and, if it is not reported yet, [report it](#reporting-bugs) with the test as the steps to reproduce it. Mention the issue in your pull request, and mark the test as expected to fail, with a comment that links the issue, so that it does not block your pull request (see below).

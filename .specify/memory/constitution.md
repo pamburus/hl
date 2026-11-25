@@ -1,13 +1,13 @@
 <!--
 Sync Impact Report:
-- Version: 2.3.0 → 2.4.0
+- Version: 2.4.0 → 2.5.0
 - Modified Sections:
-  - V. Test-First Development & Quality: Test Placement requirements now allow integration tests that run the `hl` binary, in one test binary under tests/integration/, with their shared helpers in tests/integration/support/.
-- Rationale: MINOR version bump. A new requirement is added; no principle is removed or redefined.
+  - VI. Specification & Cross-Reference Integrity: every change of behavior, including a bug fix, now leaves the specifications describing the behavior after it, in the same pull request, and a behavior is checked against its spec before it is reported or treated as a bug.
+- Rationale: MINOR version bump. New requirements are added; no principle is removed or redefined.
 - Templates requiring updates:
-  - ✅ plan-template.md: Compatible - its tests/integration/ example matches
-  - ✅ spec-template.md: Compatible - no test layout steps
-  - ✅ tasks-template.md: Compatible - test paths are given per task
+  - ✅ plan-template.md: Compatible - plans start from a spec
+  - ✅ spec-template.md: Compatible - the amendment lines are added to a spec when it is first amended
+  - ✅ tasks-template.md: Compatible - no spec maintenance steps
 - Follow-up TODOs: none
 - Date: 2026-11-25
 -->
@@ -72,6 +72,8 @@ This keeps tests and their helpers easy to find and keeps test code from inflati
 
 ### VI. Specification & Cross-Reference Integrity
 <!-- Maintain referential integrity across all documentation and code -->
+**Specifications are the reference for behavior.** Every change of behavior, whether a new feature, a change to an existing one or a bug fix, MUST leave the specifications under `specs/` describing the behavior after the change, in the same pull request. Changed behavior that no spec covers yet MUST be added to one. Before a behavior is reported or treated as a bug, it MUST be checked against the specifications. The procedure for both is in [Specifications](../../docs/guidelines/specifications.md).
+
 **Avoid renumbering identifiers whenever possible.** Prefer adding new requirements at the end of sections or using sub-identifiers (e.g., FR-030c, FR-030d) to insert requirements without disrupting existing numbering.
 
 When renumbering identifiers (FR/requirement IDs, user story IDs, feature numbers, etc.) is unavoidable, all cross-references MUST be identified and updated throughout the complete codebase including specs, documentation, code comments, and tests. Before renumbering any requirement or feature:
@@ -136,4 +138,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 2.4.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-11-25
+**Version**: 2.5.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-11-25
