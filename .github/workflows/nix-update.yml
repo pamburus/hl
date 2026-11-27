@@ -6,9 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
 
 defaults:
   run:
@@ -29,15 +27,6 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-
-      - name: Generate Auto-Merge GitHub App Token
-        id: generate-automerge-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
-        with:
-          app-id: ${{ secrets.AUTOMERGE_APP_ID }}
-          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
 
@@ -76,10 +65,20 @@ jobs:
             nix
           delete-branch: true
 
+      # The target branch checkout above may be on a different revision.
+      - name: Check out the auto-merge action
+        if: steps.create-pr.outputs.pull-request-number != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-source
+          sparse-checkout: .github/actions/enable-update-automerge
+          persist-credentials: false
+
       - name: Enable auto-merge
-        id: enable-auto-merge
-        if: steps.create-pr.outputs.pull-request-number
-        run: |
-          gh pr merge --auto -ds ${{ steps.create-pr.outputs.pull-request-number }}
-        env:
-          GH_TOKEN: ${{ steps.generate-automerge-token.outputs.token }}
+        if: steps.create-pr.outputs.pull-request-number != ''
+        uses: ./workflow-source/.github/actions/enable-update-automerge
+        with:
+          client-id: ${{ secrets.AUTOMERGE_APP_ID }}
+          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
+          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
