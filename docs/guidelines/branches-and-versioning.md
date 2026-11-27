@@ -15,7 +15,9 @@ The `master` branch stays the default branch on GitHub, so that tools reading th
 
 GitHub reads some files only from the default branch: scheduled workflows, workflows triggered by `workflow_run`, and workflows triggered by `pull_request_target` for pull requests based on `master`. Changes to them take effect when the next release reaches `master`.
 
-Renovate also reads its configuration from `master`. Once the configuration reaches `master`, Renovate opens dependency update pull requests against `develop`.
+Renovate also reads its configuration from `master`. Enable the Renovate app for this repository after the configuration reaches `master`. Renovate then opens dependency update pull requests against `develop`.
+
+Review and merge automated Cargo, toolchain, and build-environment updates manually. Apply the release-line versioning rules below when the update can change the built program.
 
 ## Releases
 

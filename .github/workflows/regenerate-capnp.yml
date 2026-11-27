@@ -17,6 +17,15 @@ name: Regenerate Cap'n Proto bindings
     branches:
       - "update-*"
       - "renovate/**"
+    paths:
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "flake.lock"
+      - "rust-toolchain.toml"
+      - "build.rs"
+      - "**/*.capnp"
+      - "contrib/bin/regenerate-capnp.sh"
+      - ".github/workflows/regenerate-capnp.yml"
 
 permissions:
   contents: read
@@ -31,10 +40,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install latest toolchain
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+      - name: Install pinned toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: stable
+          rustflags: ""
+          cache: false
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -46,42 +56,23 @@ jobs:
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: hl
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Regenerate bindings
         env:
           CARGO_TARGET_DIR: target
         run: nix shell --inputs-from . nixpkgs#capnproto --command contrib/bin/regenerate-capnp.sh
 
-      - name: Check whether bindings changed
-        id: bindings-status
+      - name: Save a patch for the trusted write-back workflow
         run: |
-          if git diff --quiet -- src/index_capnp.rs .build/capnp; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Generated bindings are already up to date."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          git diff --no-ext-diff -- src/index_capnp.rs .build/capnp/index.capnp.json > "$RUNNER_TEMP/capnp.patch"
+          if [[ ! -s "$RUNNER_TEMP/capnp.patch" ]]; then
+            rm "$RUNNER_TEMP/capnp.patch"
           fi
 
-      - name: Generate GitHub App Token
-        if: steps.bindings-status.outputs.changed == 'true'
-        id: generate-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+      - name: Upload generated patch
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-
-      - name: Commit and push regenerated bindings
-        if: steps.bindings-status.outputs.changed == 'true'
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: |
-          git config user.name "missionis[bot]"
-          git config user.email "234988995+missionis[bot]@users.noreply.github.com"
-          git add -- src/index_capnp.rs .build/capnp
-          git commit -m "build(capnp): regenerate bindings for the updated toolchain"
-          gh auth setup-git
-          git push origin HEAD:"refs/heads/${BRANCH_NAME}"
+          name: capnp-patch
+          path: ${{ runner.temp }}/capnp.patch
+          if-no-files-found: ignore
+          retention-days: 1

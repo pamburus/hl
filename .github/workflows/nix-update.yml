@@ -6,9 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
 
 defaults:
   run:
@@ -27,17 +25,8 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-
-      - name: Generate Auto-Merge GitHub App Token
-        id: generate-automerge-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
-        with:
-          app-id: ${{ secrets.AUTOMERGE_APP_ID }}
-          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
 
@@ -60,7 +49,6 @@ jobs:
         run: echo "name=update-flake-lock-${TARGET_BRANCH//\//-}" >> "${GITHUB_OUTPUT}"
 
       - name: Create pull request for flake.lock update
-        id: create-pr
         uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
         with:
           token: ${{ steps.generate-token.outputs.token }}
@@ -75,11 +63,3 @@ jobs:
             dependencies
             nix
           delete-branch: true
-
-      - name: Enable auto-merge
-        id: enable-auto-merge
-        if: steps.create-pr.outputs.pull-request-number
-        run: |
-          gh pr merge --auto -ds ${{ steps.create-pr.outputs.pull-request-number }}
-        env:
-          GH_TOKEN: ${{ steps.generate-automerge-token.outputs.token }}

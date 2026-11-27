@@ -25,15 +25,8 @@ jobs:
   prepare-release:
     name: Prepare Release
     runs-on: ubuntu-26.04
-    env:
-      # renovate: datasource=crate depName=cargo-quickinstall
-      CARGO_QUICKINSTALL_VERSION: "0.3.53"
-      # renovate: datasource=crate depName=cargo-edit
-      CARGO_EDIT_VERSION: "0.13.13"
-      # renovate: datasource=github-releases depName=orhun/git-cliff extractVersion=^v(?<version>.+)$
-      GIT_CLIFF_VERSION: "2.12.0"
     outputs:
-      version: ${{ steps.update-version.outputs.version }}
+      version: ${{ steps.prepare.outputs.version }}
       release-tag: ${{ steps.create-release.outputs.release-tag }}
       temp-branch: ${{ steps.create-temp-branch.outputs.branch }}
 
@@ -62,46 +55,16 @@ jobs:
           git checkout -b "${TEMP_BRANCH:?}"
           echo "branch=${TEMP_BRANCH:?}" >> $GITHUB_OUTPUT
 
-      - name: Setup Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
+      - name: Prepare release
+        id: prepare
+        uses: ./.github/actions/prepare-release
         with:
-          toolchain: stable
-          rustflags: ""
-
-      - name: Install cargo-quickinstall
-        run: cargo install --locked "cargo-quickinstall@${CARGO_QUICKINSTALL_VERSION:?}"
-
-      - name: Install cargo-edit
-        run: cargo quickinstall --force --version "${CARGO_EDIT_VERSION:?}" cargo-edit
-
-      - name: Update version in Cargo.toml
-        id: update-version
-        run: |
-          cargo set-version --package ${{ github.event.repository.name }} --bump "${{ github.event.inputs.release-type }}"
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "${{ github.event.repository.name }}") | .version')
-          echo "version=${VERSION?}" >> $GITHUB_OUTPUT
-
-      - name: Install git-cliff
-        run: |
-          # Install git-cliff for generating release notes
-          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION:?}/git-cliff-${GIT_CLIFF_VERSION:?}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz
-          sudo mv git-cliff-*/git-cliff /usr/local/bin/
-          git-cliff --version
-
-      - name: Generate release notes
-        id: release-notes
-        run: |
-          VERSION=${{ steps.update-version.outputs.version }}
-          PREVIOUS_TAG=$(git tag -l "v*.*.*" --merged HEAD --sort=-version:refname | head -1 || echo "")
-          git-cliff --tag "v${VERSION:?}" --output RELEASE_NOTES.md --verbose "${PREVIOUS_TAG:?}..HEAD"
-        env:
-          GITHUB_REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ github.token }}
+          release-type: ${{ inputs.release-type }}
 
       - name: Create draft release
         id: create-release
         run: |
-          VERSION=${{ steps.update-version.outputs.version }}
+          VERSION=${{ steps.prepare.outputs.version }}
 
           # Check if version is a pre-release (contains hyphen)
           if [[ "${VERSION}" == *-* ]]; then
@@ -121,7 +84,7 @@ jobs:
 
       - name: Update schema references in TOML files
         run: |
-          VERSION=${{ steps.update-version.outputs.version }}
+          VERSION=${{ steps.prepare.outputs.version }}
 
           # Find all TOML files with schema references (both relative and absolute) and update them
           # Matches both:
@@ -135,7 +98,7 @@ jobs:
 
       - name: Update schema references in JSON schema files
         run: |
-          VERSION=${{ steps.update-version.outputs.version }}
+          VERSION=${{ steps.prepare.outputs.version }}
 
           # Find all JSON schema files with schema references and update them
           find . -name "*.schema.json" -type f -exec grep -l "https://raw.githubusercontent.com/${{ github.repository }}/" {} \; | while read -r file; do
@@ -158,7 +121,7 @@ jobs:
           git add Cargo.toml Cargo.lock
           git add -u "*.toml" || true
           git add -u "*.schema.json" || true
-          git commit -m "chore(release): bump version to ${{ steps.update-version.outputs.version }}"
+          git commit -m "chore(release): bump version to ${{ steps.prepare.outputs.version }}"
           git push origin "refs/heads/${{ steps.create-temp-branch.outputs.branch }}"
 
   build:
@@ -183,7 +146,7 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }},action-hub

@@ -19,8 +19,10 @@ permissions:
 
 jobs:
   retarget:
+    # The onboarding PR belongs on the default branch and is handled during rollout.
+    if: github.event.pull_request.user.login != 'renovate[bot]'
     name: Retarget to develop
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Change base branch to develop or close
         run: |

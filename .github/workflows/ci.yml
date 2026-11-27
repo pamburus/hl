@@ -39,6 +39,29 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Check version bump for automated dependency updates
+        if: >-
+          github.event_name == 'pull_request' &&
+          matrix.platform == 'ubuntu-latest' &&
+          (github.event.pull_request.user.login == 'renovate[bot]' ||
+           github.event.pull_request.user.login == 'missionis[bot]')
+        run: |
+          if git diff --quiet HEAD^1 HEAD -- ':(glob)**/Cargo.toml' Cargo.lock rust-toolchain.toml flake.lock Cross.toml; then
+            exit 0
+          fi
+          python3 - <<'PYTHON'
+          import pathlib
+          import subprocess
+          import tomllib
+
+          base = tomllib.loads(subprocess.check_output(["git", "show", "HEAD^1:Cargo.toml"], text=True))
+          head = tomllib.loads(pathlib.Path("Cargo.toml").read_text())
+          if base["workspace"]["package"]["version"] == head["workspace"]["package"]["version"]:
+              raise SystemExit("::error::Apply the release-line version bump before merging this dependency update.")
+          PYTHON
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -342,3 +365,25 @@ jobs:
 
       - name: Run nix build
         run: nix build --print-build-logs --no-update-lock-file
+
+  release-preparation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - uses: ./.github/actions/prepare-release
+        with:
+          release-type: patch
+
+  release-build:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read

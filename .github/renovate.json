@@ -12,7 +12,8 @@
     "cargo",
     "github-actions",
     "custom.regex",
-    "rust-toolchain"
+    "rust-toolchain",
+    "dockerfile"
   ],
   "timezone": "Etc/UTC",
   "labels": [
@@ -180,14 +181,14 @@
       "minimumReleaseAge": "7 days"
     },
     {
-      "description": "The first-party rust-clap revision has no release timestamp",
+      "description": "Keep the fork revision that provides clap_mangen::Man::verbatim",
       "matchManagers": [
         "cargo"
       ],
       "matchPackageNames": [
         "https://github.com/pamburus/rust-clap.git"
       ],
-      "minimumReleaseAge": "0 days"
+      "enabled": false
     },
     {
       "description": "Use `build` commit type for all updates, overriding the per-type defaults from `config:recommended`",
@@ -195,6 +196,40 @@
         "*"
       ],
       "semanticCommitType": "build"
+    },
+    {
+      "description": "Update Cross and its pinned release image together",
+      "matchPackageNames": [
+        "cross",
+        "ghcr.io/cross-rs/x86_64-unknown-linux-gnu"
+      ],
+      "groupName": "cross release tooling"
+    },
+    {
+      "description": "Review changes that affect the built program and apply the release-line version bump",
+      "matchManagers": [
+        "cargo",
+        "rust-toolchain",
+        "dockerfile"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Require manual merge for release tooling and privileged workflows",
+      "matchFileNames": [
+        "Cross.toml",
+        ".github/actions/prepare-release/**",
+        ".github/workflows/build.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/commit-capnp.yml",
+        ".github/workflows/regenerate-capnp.yml",
+        ".github/workflows/security-update.yml",
+        ".github/workflows/nix-update.yml",
+        ".github/workflows/label-resolved-issues.yml",
+        ".github/workflows/perf-gate-report.yml",
+        ".github/workflows/retarget-pr.yml"
+      ],
+      "automerge": false
     }
   ],
   "schedule": [
@@ -212,6 +247,20 @@
         "'(?<depName>ubuntu|macos|windows)-(?<currentValue>[0-9.]+)'"
       ],
       "datasourceTemplate": "github-runners"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the cross image pinned for the Linux x86-64 release build",
+      "managerFilePatterns": [
+        "/^(?:Cross\\.toml)$/"
+      ],
+      "matchStrings": [
+        "image = \"(?<depName>ghcr\\.io/cross-rs/x86_64-unknown-linux-gnu):(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "docker"
     }
+  ],
+  "gitIgnoredAuthors": [
+    "234988995+missionis[bot]@users.noreply.github.com"
   ]
 }

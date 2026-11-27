@@ -1,0 +1,81 @@
+name: Commit regenerated Cap'n Proto bindings
+
+# Runs the default-branch workflow with write credentials after read-only regeneration.
+# Treat the artifact as data. Apply only edits to the two tracked generated files.
+on:
+  workflow_run:
+    workflows: ["Regenerate Cap'n Proto bindings"]
+    branches: ["renovate/**", "update-*"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  commit:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.path == '.github/workflows/regenerate-capnp.yml'
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Find generated patch
+        id: artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?name=capnp-patch" \
+            --jq '.artifacts[] | select(.expired == false) | .id')
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout source revision
+        if: steps.artifact.outputs.id != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Download generated patch
+        if: steps.artifact.outputs.id != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ steps.artifact.outputs.id }}
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: ${{ runner.temp }}/capnp
+
+      - name: Apply generated patch
+        if: steps.artifact.outputs.id != ''
+        run: |
+          git apply --index --include=src/index_capnp.rs --include=.build/capnp/index.capnp.json \
+            "$RUNNER_TEMP/capnp/capnp.patch"
+          git diff --cached --quiet --diff-filter=ADRTUXB
+          test -z "$(git diff --cached --summary)"
+          git config user.name "missionis[bot]"
+          git config user.email "234988995+missionis[bot]@users.noreply.github.com"
+          git -c core.hooksPath=/dev/null commit -m "build(capnp): regenerate bindings for the updated toolchain"
+
+      - name: Generate GitHub App Token
+        if: steps.artifact.outputs.id != ''
+        id: generate-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Push generated bindings if the branch has not moved
+        if: steps.artifact.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          gh auth setup-git
+          git -c core.hooksPath=/dev/null push origin \
+            --force-with-lease="refs/heads/${BRANCH}:${SOURCE_SHA}" HEAD:"refs/heads/${BRANCH}"
