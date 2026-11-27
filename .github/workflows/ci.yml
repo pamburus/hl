@@ -127,7 +127,15 @@ jobs:
           matrix.platform == 'ubuntu-latest' &&
           (github.event.pull_request.user.login == 'renovate[bot]' ||
            (github.event.pull_request.user.login == 'missionis[bot]' && startsWith(github.head_ref, 'update-')))
-        run: python3 scripts/dependency-version.py check HEAD^1
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/heads/$DEFAULT_BRANCH"
+          if ! git cat-file -e FETCH_HEAD:scripts/dependency-version.py 2>/dev/null; then
+            echo "::notice::Dependency version enforcement starts when write-back reaches the default branch."
+            exit 0
+          fi
+          python3 scripts/dependency-version.py check HEAD^1
 
   # Checks that the workspace builds with the minimum Rust version declared in Cargo.toml. The other jobs use the
   # toolchain from rust-toolchain.toml, which is newer.

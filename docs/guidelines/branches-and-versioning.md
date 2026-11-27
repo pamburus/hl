@@ -20,6 +20,7 @@ Renovate also reads its configuration from `master`. Enable the Renovate app for
 Renovate auto-merges routine updates after required checks pass. It leaves release and privileged workflow changes for manual review.
 On automated dependency pull requests, the preparation workflow regenerates Cap’n Proto bindings and requests the next release-line version when the production Cargo dependency graph, Rust toolchain, flake lock, or Cross configuration changes.
 The write-back workflow commits the generated changes on the pull request branch. The required Linux check verifies the version against the target branch.
+During rollout, automated dependency pull requests may keep the current version until the version write-back reaches `master`.
 
 ## Releases
 
