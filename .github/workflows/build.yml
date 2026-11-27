@@ -128,7 +128,17 @@ jobs:
           rustup target add ${{ matrix.target }}
 
       - name: Build
-        run: echo ${{ matrix.target }} | xargs -n 1 ${{ env.CARGO }} build --release --locked --verbose --target
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release }}
+        run: |
+          # Cross forwards CARGO_* variables to Cargo inside the build container.
+          if [[ -z "$RELEASE_TAG" ]]; then
+            export CARGO_PROFILE_RELEASE_OPT_LEVEL=0
+            export CARGO_PROFILE_RELEASE_LTO=off
+            export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+          fi
+          echo ${{ matrix.target }} | xargs -n 1 ${{ env.CARGO }} build --release --locked --verbose --target
 
       - name: Verify Linux x86-64 glibc compatibility
         if: matrix.name == 'linux-x86-gnu'
