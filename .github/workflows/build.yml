@@ -5,8 +5,9 @@ on:
     inputs:
       release:
         description: "Release tag or identifier"
-        required: true
+        required: false
         type: string
+        default: ""
       ref:
         description: "Git ref to build from"
         required: false
@@ -127,7 +128,29 @@ jobs:
           rustup target add ${{ matrix.target }}
 
       - name: Build
-        run: echo ${{ matrix.target }} | xargs -n 1 ${{ env.CARGO }} build --release --locked --verbose --target
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release }}
+        run: |
+          # Cross forwards CARGO_* variables to Cargo inside the build container.
+          if [[ -z "$RELEASE_TAG" ]]; then
+            export CARGO_PROFILE_RELEASE_OPT_LEVEL=0
+            export CARGO_PROFILE_RELEASE_LTO=off
+            export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+          fi
+          echo ${{ matrix.target }} | xargs -n 1 ${{ env.CARGO }} build --release --locked --verbose --target
+
+      - name: Verify Linux x86-64 glibc compatibility
+        if: matrix.name == 'linux-x86-gnu'
+        shell: bash
+        run: |
+          max_glibc=2.18
+          required=$(readelf --version-info --wide target/x86_64-unknown-linux-gnu/release/hl |
+            sed -nE 's/.*Name: GLIBC_([0-9]+(\.[0-9]+)+).*/\1/p' | sort -V | tail -1)
+          if [[ "$(printf '%s\n' "${required:?}" "$max_glibc" | sort -V | tail -1)" != "$max_glibc" ]]; then
+            echo "::error::binary requires glibc ${required}, newer than ${max_glibc}"
+            exit 1
+          fi
 
       - name: Sign
         if: matrix.family == 'macos'
@@ -150,6 +173,7 @@ jobs:
         run: tar -C ./target -cz -f ${{ matrix.asset }} hl
 
       - name: Upload binaries to release
+        if: inputs.release != ''
         run: |
           gh release upload "$RELEASE_TAG" "${{ matrix.asset }}" --clobber
         env:
