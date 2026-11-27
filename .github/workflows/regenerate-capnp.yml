@@ -14,18 +14,10 @@ name: Regenerate Cap'n Proto bindings
 
 "on":
   push:
+    # Every push can supersede a run whose patch has yet to be committed.
     branches:
       - "update-*"
       - "renovate/**"
-    paths:
-      - "**/Cargo.toml"
-      - "Cargo.lock"
-      - "flake.lock"
-      - "rust-toolchain.toml"
-      - "build.rs"
-      - "**/*.capnp"
-      - "contrib/bin/regenerate-capnp.sh"
-      - ".github/workflows/regenerate-capnp.yml"
 
 permissions:
   contents: read
