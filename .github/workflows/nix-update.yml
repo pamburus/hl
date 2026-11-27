@@ -17,7 +17,7 @@ defaults:
 jobs:
   update-lock:
     name: Update flake.lock
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       # Scheduled runs and manual runs on master update develop, because master holds only the latest release.
       # Manual runs on any other branch, such as release/*, update that branch.
