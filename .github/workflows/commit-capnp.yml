@@ -1,65 +1,114 @@
-name: Commit regenerated Cap'n Proto bindings
+name: Commit dependency update
 
 # Runs the default-branch workflow with write credentials after read-only regeneration.
-# Treat the artifact as data. Apply only edits to the two tracked generated files.
+# Treat the artifact as data. Apply the binding patch to the two generated files
+# and compute any version edit with the script from the trusted workflow revision.
 on:
   workflow_run:
-    workflows: ["Regenerate Cap'n Proto bindings"]
+    workflows: ["Prepare dependency update"]
     branches: ["renovate/**", "update-*"]
     types: [completed]
 
 permissions:
   actions: read
   contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   commit:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.path == '.github/workflows/regenerate-capnp.yml'
     runs-on: ubuntu-26.04
     steps:
-      - name: Find generated patch
+      - name: Find dependency update artifact
         id: artifact
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?name=capnp-patch" \
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?name=dependency-update" \
             --jq '.artifacts[] | select(.expired == false) | .id')
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout source revision
+      - name: Verify the update is still an open bot PR
         if: steps.artifact.outputs.id != ''
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          base=$(gh api "repos/${GITHUB_REPOSITORY}/pulls" -X GET -f state=open \
+            -f "head=${GITHUB_REPOSITORY_OWNER}:${BRANCH}" |
+            jq -r --arg repository "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" '
+              .[] | select(
+                .head.repo.full_name == $repository and .head.sha == $sha and
+                (.base.ref == "develop" or (.base.ref | startswith("release/"))) and
+                ((.user.login == "renovate[bot]" and (.head.ref | startswith("renovate/"))) or
+                 (.user.login == "missionis[bot]" and (.head.ref | startswith("update-"))))
+              ) | .base.sha
+            ' | head -1)
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout source revision
+        if: steps.pr.outputs.base != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Download generated patch
-        if: steps.artifact.outputs.id != ''
+      - name: Download dependency update artifact
+        if: steps.pr.outputs.base != ''
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ steps.artifact.outputs.id }}
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
-          path: ${{ runner.temp }}/capnp
+          path: ${{ runner.temp }}/dependency-update
 
-      - name: Apply generated patch
-        if: steps.artifact.outputs.id != ''
+      - name: Commit generated changes
+        if: steps.pr.outputs.base != ''
+        id: commit
+        env:
+          BASE_SHA: ${{ steps.pr.outputs.base }}
+          TRUSTED_SHA: ${{ github.workflow_sha }}
         run: |
-          git apply --index --include=src/index_capnp.rs --include=.build/capnp/index.capnp.json \
-            "$RUNNER_TEMP/capnp/capnp.patch"
+          artifact="$RUNNER_TEMP/dependency-update"
+          if [[ -f "$artifact/capnp.patch" ]]; then
+            git apply --index --include=src/index_capnp.rs --include=.build/capnp/index.capnp.json \
+              "$artifact/capnp.patch"
+          fi
           git diff --cached --quiet --diff-filter=ADRTUXB
           test -z "$(git diff --cached --summary)"
+          if [[ -f "$artifact/version-base" ]]; then
+            # Wait for a new run if the target branch advanced beyond this PR.
+            if [[ "$(< "$artifact/version-base")" != "$BASE_SHA" ]] ||
+                ! git merge-base --is-ancestor "$BASE_SHA" HEAD; then
+              echo "::notice::Rebase the dependency update onto its target branch to apply the version bump."
+              exit 0
+            fi
+            git show "$TRUSTED_SHA:scripts/dependency-version.py" > "$RUNNER_TEMP/dependency-version.py"
+            python3 -I "$RUNNER_TEMP/dependency-version.py" apply "$BASE_SHA"
+            git add -- Cargo.toml Cargo.lock
+          fi
+          if git diff --cached --quiet; then
+            exit 0
+          fi
           git config user.name "missionis[bot]"
           git config user.email "234988995+missionis[bot]@users.noreply.github.com"
-          git -c core.hooksPath=/dev/null commit -m "build(capnp): regenerate bindings for the updated toolchain"
+          git -c core.hooksPath=/dev/null commit -m "build(deps): prepare the dependency update"
+          echo "created=true" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App Token
-        if: steps.artifact.outputs.id != ''
+        if: steps.commit.outputs.created == 'true'
         id: generate-token
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
@@ -69,8 +118,8 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
-      - name: Push generated bindings if the branch has not moved
-        if: steps.artifact.outputs.id != ''
+      - name: Push generated changes if the branch has not moved
+        if: steps.commit.outputs.created == 'true'
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}

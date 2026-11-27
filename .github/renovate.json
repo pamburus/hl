@@ -23,6 +23,7 @@
   "semanticCommitType": "build",
   "semanticCommitScope": "deps",
   "prConcurrentLimit": 1,
+  "rebaseWhen": "behind-base-branch",
   "packageRules": [
     {
       "description": "Label GitHub Actions updates",
@@ -204,15 +205,6 @@
         "ghcr.io/cross-rs/x86_64-unknown-linux-gnu"
       ],
       "groupName": "cross release tooling"
-    },
-    {
-      "description": "Review changes that affect the built program and apply the release-line version bump",
-      "matchManagers": [
-        "cargo",
-        "rust-toolchain",
-        "dockerfile"
-      ],
-      "automerge": false
     },
     {
       "description": "Require manual merge for release tooling and privileged workflows",

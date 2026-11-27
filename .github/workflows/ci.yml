@@ -42,27 +42,6 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Check version bump for automated dependency updates
-        if: >-
-          github.event_name == 'pull_request' &&
-          matrix.platform == 'ubuntu-latest' &&
-          (github.event.pull_request.user.login == 'renovate[bot]' ||
-           github.event.pull_request.user.login == 'missionis[bot]')
-        run: |
-          if git diff --quiet HEAD^1 HEAD -- ':(glob)**/Cargo.toml' Cargo.lock rust-toolchain.toml flake.lock Cross.toml; then
-            exit 0
-          fi
-          python3 - <<'PYTHON'
-          import pathlib
-          import subprocess
-          import tomllib
-
-          base = tomllib.loads(subprocess.check_output(["git", "show", "HEAD^1:Cargo.toml"], text=True))
-          head = tomllib.loads(pathlib.Path("Cargo.toml").read_text())
-          if base["workspace"]["package"]["version"] == head["workspace"]["package"]["version"]:
-              raise SystemExit("::error::Apply the release-line version bump before merging this dependency update.")
-          PYTHON
-
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
@@ -140,6 +119,15 @@ jobs:
 
       - name: Run executable
         run: cargo run --locked
+
+      - name: Check version for automated dependency updates
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.base_ref != 'master' &&
+          matrix.platform == 'ubuntu-latest' &&
+          (github.event.pull_request.user.login == 'renovate[bot]' ||
+           (github.event.pull_request.user.login == 'missionis[bot]' && startsWith(github.head_ref, 'update-')))
+        run: python3 scripts/dependency-version.py check HEAD^1
 
   # Checks that the workspace builds with the minimum Rust version declared in Cargo.toml. The other jobs use the
   # toolchain from rust-toolchain.toml, which is newer.

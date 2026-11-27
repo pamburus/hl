@@ -13,11 +13,13 @@ A release line is `develop` or a `release/*` branch.
 
 The `master` branch stays the default branch on GitHub, so that tools reading the default branch, such as `cargo binstall --git`, see the latest release. It does not accept pull requests. The release workflow fast-forwards it to each stable release that is newer than the current one. Pull requests opened against it are moved to `develop` automatically.
 
-GitHub reads some files only from the default branch: scheduled workflows, workflows triggered by `workflow_run`, and workflows triggered by `pull_request_target` for pull requests based on `master`. Changes to them take effect when the next release reaches `master`.
+GitHub loads scheduled, `workflow_run`, and `pull_request_target` workflows from the default branch. Changes to those workflow definitions take effect when the next release reaches `master`.
 
 Renovate also reads its configuration from `master`. Enable the Renovate app for this repository after the configuration reaches `master`. Renovate then opens dependency update pull requests against `develop`.
 
-Review and merge automated Cargo, toolchain, and build-environment updates manually. Apply the release-line versioning rules below when the update can change the built program.
+Renovate auto-merges routine updates after required checks pass. It leaves release and privileged workflow changes for manual review.
+On automated dependency pull requests, the preparation workflow regenerates Cap’n Proto bindings and requests the next release-line version when the production Cargo dependency graph, Rust toolchain, flake lock, or Cross configuration changes.
+The write-back workflow commits the generated changes on the pull request branch. The required Linux check verifies the version against the target branch.
 
 ## Releases
 
