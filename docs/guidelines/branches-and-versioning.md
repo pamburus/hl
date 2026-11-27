@@ -13,7 +13,9 @@ A release line is `develop` or a `release/*` branch.
 
 The `master` branch stays the default branch on GitHub, so that tools reading the default branch, such as `cargo binstall --git`, see the latest release. It does not accept pull requests. The release workflow fast-forwards it to each stable release that is newer than the current one. Pull requests opened against it are moved to `develop` automatically.
 
-GitHub reads some files only from the default branch: `.github/dependabot.yml`, scheduled workflows, workflows triggered by `workflow_run`, and workflows triggered by `pull_request_target` for pull requests based on `master`. Changes to them take effect when the next release reaches `master`.
+GitHub reads some files only from the default branch: scheduled workflows, workflows triggered by `workflow_run`, and workflows triggered by `pull_request_target` for pull requests based on `master`. Changes to them take effect when the next release reaches `master`.
+
+Renovate also reads its configuration from `master`. Once the configuration reaches `master`, Renovate opens dependency update pull requests against `develop`.
 
 ## Releases
 

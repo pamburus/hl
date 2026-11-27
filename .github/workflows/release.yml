@@ -25,6 +25,13 @@ jobs:
   prepare-release:
     name: Prepare Release
     runs-on: ubuntu-latest
+    env:
+      # renovate: datasource=crate depName=cargo-quickinstall
+      CARGO_QUICKINSTALL_VERSION: "0.3.53"
+      # renovate: datasource=crate depName=cargo-edit
+      CARGO_EDIT_VERSION: "0.13.13"
+      # renovate: datasource=github-releases depName=orhun/git-cliff extractVersion=^v(?<version>.+)$
+      GIT_CLIFF_VERSION: "2.12.0"
     outputs:
       version: ${{ steps.update-version.outputs.version }}
       release-tag: ${{ steps.create-release.outputs.release-tag }}
@@ -62,10 +69,10 @@ jobs:
           rustflags: ""
 
       - name: Install cargo-quickinstall
-        run: cargo install cargo-quickinstall
+        run: cargo install --locked "cargo-quickinstall@${CARGO_QUICKINSTALL_VERSION:?}"
 
       - name: Install cargo-edit
-        run: cargo quickinstall --force cargo-edit
+        run: cargo quickinstall --force --version "${CARGO_EDIT_VERSION:?}" cargo-edit
 
       - name: Update version in Cargo.toml
         id: update-version
@@ -77,8 +84,7 @@ jobs:
       - name: Install git-cliff
         run: |
           # Install git-cliff for generating release notes
-          CLIFF_VERSION="2.12.0"
-          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/v${CLIFF_VERSION}/git-cliff-${CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz
+          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION:?}/git-cliff-${GIT_CLIFF_VERSION:?}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz
           sudo mv git-cliff-*/git-cliff /usr/local/bin/
           git-cliff --version
 

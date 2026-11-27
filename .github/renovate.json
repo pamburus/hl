@@ -1,0 +1,182 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "customManagers:githubActionsVersions",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "baseBranchPatterns": [
+    "develop"
+  ],
+  "enabledManagers": [
+    "cargo",
+    "github-actions",
+    "custom.regex",
+    "rust-toolchain"
+  ],
+  "timezone": "Etc/UTC",
+  "labels": [
+    "dependencies"
+  ],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "build",
+  "semanticCommitScope": "deps",
+  "prConcurrentLimit": 1,
+  "packageRules": [
+    {
+      "description": "Label GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "addLabels": [
+        "github-actions"
+      ],
+      "schedule": [
+        "* 4-7 * * 1"
+      ]
+    },
+    {
+      "description": "Group CodeQL actions",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "github/codeql-action",
+        "github/codeql-action/**"
+      ],
+      "groupName": "codeql-action"
+    },
+    {
+      "description": "Tools pinned in workflows via `# renovate:` comments",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "addLabels": [
+        "github-actions"
+      ],
+      "schedule": [
+        "* 4-7 * * 1"
+      ]
+    },
+    {
+      "description": "Update the Rust toolchain with the CI tools",
+      "matchManagers": [
+        "rust-toolchain"
+      ],
+      "addLabels": [
+        "rust"
+      ],
+      "schedule": [
+        "* 4-7 * * 1"
+      ]
+    },
+    {
+      "description": "Label Cargo updates",
+      "matchManagers": [
+        "cargo"
+      ],
+      "addLabels": [
+        "rust"
+      ],
+      "schedule": [
+        "* 18-21 * * 5"
+      ],
+      "rangeStrategy": "bump"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "capnp",
+        "capnpc"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "capnp",
+      "description": "The runtime and code generator must move together to keep the checked-in bindings compatible"
+    },
+    {
+      "description": "The weekly Cargo lockfile workflow handles compatible patch updates",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Keep the existing minor-update exclusions for Cargo manifests",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "anstream",
+        "anyhow",
+        "assert_matches",
+        "clap",
+        "clap_complete",
+        "const-str",
+        "derive_more",
+        "dirs",
+        "enum-map",
+        "enumset",
+        "flate2",
+        "fnv",
+        "humantime",
+        "itoa",
+        "known-folders",
+        "kqueue",
+        "maplit",
+        "memchr",
+        "notify",
+        "num_cpus",
+        "once_cell",
+        "owo-colors",
+        "pest",
+        "pest_derive",
+        "regex",
+        "rust-embed",
+        "semver",
+        "serde",
+        "serde_json",
+        "serde_plain",
+        "shellwords",
+        "snap",
+        "static_assertions",
+        "thiserror",
+        "titlecase",
+        "toml",
+        "unicode-segmentation",
+        "ureq",
+        "utf8-supported",
+        "wild",
+        "wildmatch",
+        "yaml-peg"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Automerge all updates once required checks pass, after a release has had a week to be caught if compromised",
+      "matchPackageNames": [
+        "*"
+      ],
+      "automerge": true,
+      "automergeStrategy": "squash",
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Use `build` commit type for all updates, overriding the per-type defaults from `config:recommended`",
+      "matchPackageNames": [
+        "*"
+      ],
+      "semanticCommitType": "build"
+    }
+  ]
+}
