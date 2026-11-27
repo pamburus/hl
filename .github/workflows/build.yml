@@ -13,11 +13,6 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: write
-  issues: read
-  actions: read
-
 jobs:
   build:
     name: Build for ${{ matrix.name }}
@@ -25,6 +20,8 @@ jobs:
 
     env:
       CARGO: cargo
+      # renovate: datasource=crate depName=cross
+      CROSS_VERSION: "0.2.5"
 
     strategy:
       matrix:
@@ -40,7 +37,7 @@ jobs:
           - windows-arm
         include:
           - name: linux-x86-gnu
-            os: ubuntu-latest
+            os: ubuntu-26.04
             family: linux
             arch: x86_64
             target: x86_64-unknown-linux-gnu
@@ -48,7 +45,7 @@ jobs:
             asset: hl-linux-x86_64-gnu.tar.gz
             cross: true
           - name: linux-x86-musl
-            os: ubuntu-latest
+            os: ubuntu-26.04
             family: linux
             arch: x86_64
             target: x86_64-unknown-linux-musl
@@ -56,7 +53,7 @@ jobs:
             asset: hl-linux-x86_64-musl.tar.gz
             cross: true
           - name: linux-arm-gnu
-            os: ubuntu-latest
+            os: ubuntu-26.04
             family: linux
             arch: aarch64
             target: aarch64-unknown-linux-gnu
@@ -64,7 +61,7 @@ jobs:
             asset: hl-linux-arm64-gnu.tar.gz
             cross: true
           - name: linux-arm-musl
-            os: ubuntu-latest
+            os: ubuntu-26.04
             family: linux
             arch: aarch64
             target: aarch64-unknown-linux-musl
@@ -72,21 +69,21 @@ jobs:
             asset: hl-linux-arm64-musl.tar.gz
             cross: true
           - name: macos-x86
-            os: macos-latest
+            os: macos-26
             family: macos
             arch: x86_64
             target: x86_64-apple-darwin
             archiver: tar.gz
             asset: hl-macos-x86_64.tar.gz
           - name: macos-arm
-            os: macos-latest
+            os: macos-26
             family: macos
             arch: aarch64
             target: aarch64-apple-darwin
             archiver: tar.gz
             asset: hl-macos-arm64.tar.gz
           - name: macos-universal
-            os: macos-latest
+            os: macos-26
             family: macos
             arch: "{aarch64,x86_64}"
             target: "{aarch64,x86_64}-apple-darwin"
@@ -94,14 +91,14 @@ jobs:
             asset: hl-macos.tar.gz
             universal: true
           - name: windows-x86
-            os: windows-latest
+            os: windows-2025
             family: windows
             arch: x86_64
             target: x86_64-pc-windows-msvc
             archiver: 7z
             asset: hl-windows.zip
           - name: windows-arm
-            os: windows-latest
+            os: windows-2025
             family: windows
             arch: aarch64
             target: aarch64-pc-windows-msvc
@@ -111,17 +108,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
 
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: stable
           rustflags: ""
 
       - name: Install Cross
         if: matrix.cross
         run: |
-          cargo install cross --version 0.2.5 --locked
+          cargo install --locked "cross@${CROSS_VERSION:?}"
           echo "CARGO=cross" >> $GITHUB_ENV
 
       - name: Add Target
@@ -154,6 +151,7 @@ jobs:
 
       - name: Upload binaries to release
         run: |
-          gh release upload "${{ inputs.release }}" "${{ matrix.asset }}" --clobber
+          gh release upload "$RELEASE_TAG" "${{ matrix.asset }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release }}

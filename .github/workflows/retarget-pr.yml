@@ -20,7 +20,7 @@ permissions:
 jobs:
   retarget:
     name: Retarget to develop
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Change base branch to develop or close
         run: |

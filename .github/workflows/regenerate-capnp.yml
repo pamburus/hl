@@ -4,13 +4,7 @@ name: Regenerate Cap'n Proto bindings
 # The generated Cap'n Proto bindings are checked in, and the code they contain is tied to both the
 # `capnpc` crate and the Cap'n Proto compiler that produced them — each records its version in the
 # generated header. A dependency update that moves `capnpc` therefore leaves the checked-in sources
-# stale, and the build script refuses to accept them, but neither Dependabot nor the scheduled update
-# job runs a build, so the staleness only surfaces as a red CI run.
-#
-# This job closes that gap: whenever an automated dependency branch is updated, it regenerates
-# whatever is out of date and pushes the result back onto the same branch. Dependabot branches are
-# handled from `pull_request_target`, because the corresponding `push` workflows do not receive the
-# repository secrets needed to mint the GitHub App token used for the push-back.
+# stale, and the build script refuses to accept them. This job generates a patch for the bot PR.
 #
 # The compiler comes from the nixpkgs revision pinned in `flake.lock` rather than from the runner
 # image, because its version is embedded verbatim in the generated output. An unpinned compiler would
@@ -18,11 +12,8 @@ name: Regenerate Cap'n Proto bindings
 # against the same pinned compiler, so a contributor reproducing this locally gets the same bytes.
 
 "on":
-  push:
-    branches:
-      - "update-*"
-  pull_request_target:
-    types: [opened, synchronize, reopened]
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
     branches: [develop, "release/**"]
 
 permissions:
@@ -30,26 +21,23 @@ permissions:
 
 jobs:
   regenerate:
-    name: Regenerate Cap'n Proto bindings
-    runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'push' ||
-      (
-        github.event_name == 'pull_request_target' &&
-        github.event.pull_request.user.login == 'dependabot[bot]' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        startsWith(github.event.pull_request.head.ref, 'dependabot/')
-      )
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      ((github.event.pull_request.user.login == 'renovate[bot]' && startsWith(github.head_ref, 'renovate/')) ||
+       (github.event.pull_request.user.login == 'missionis[bot]' && startsWith(github.head_ref, 'update-')))
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
-      - name: Install latest toolchain
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+      - name: Install pinned toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: stable
+          rustflags: ""
+          cache: false
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -58,44 +46,27 @@ jobs:
         uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
 
       - name: Cache Nix store
-        if: github.event_name == 'push'
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: hl
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Regenerate bindings
         env:
           CARGO_TARGET_DIR: target
         run: nix shell --inputs-from . nixpkgs#capnproto --command contrib/bin/regenerate-capnp.sh
 
-      - name: Check whether bindings changed
-        id: bindings-status
+      - name: Save a patch for the trusted write-back workflow
         run: |
-          if git diff --quiet -- src/index_capnp.rs .build/capnp; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Generated bindings are already up to date."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          patch="$RUNNER_TEMP/capnp.patch"
+          git diff --no-ext-diff -- src/index_capnp.rs .build/capnp/index.capnp.json > "$patch"
+          if [[ ! -s "$patch" ]]; then
+            rm "$patch"
           fi
 
-      - name: Generate GitHub App Token
-        if: steps.bindings-status.outputs.changed == 'true'
-        id: generate-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+      - name: Upload generated binding patch
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-
-      - name: Commit and push regenerated bindings
-        if: steps.bindings-status.outputs.changed == 'true'
-        env:
-          BRANCH_NAME: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.ref || github.ref_name }}
-        run: |
-          git config user.name "missionis[bot]"
-          git config user.email "234988995+missionis[bot]@users.noreply.github.com"
-          git add -- src/index_capnp.rs .build/capnp
-          git commit -m "build(capnp): regenerate bindings for the updated toolchain"
-          git push origin HEAD:"${BRANCH_NAME}"
+          name: capnp-patch
+          path: ${{ runner.temp }}/capnp.patch
+          if-no-files-found: ignore
+          retention-days: 1

@@ -7,7 +7,7 @@ reviews:
       - "release/.*"
     # Dependency update pull requests are checked by CI.
     ignore_usernames:
-      - "dependabot[bot]"
+      - "renovate[bot]"
       - "missionis[bot]"
   path_filters:
     # Generated from the Cap'n Proto schema.

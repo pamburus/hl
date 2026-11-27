@@ -13,7 +13,12 @@ A release line is `develop` or a `release/*` branch.
 
 The `master` branch stays the default branch on GitHub, so that tools reading the default branch, such as `cargo binstall --git`, see the latest release. It does not accept pull requests. The release workflow fast-forwards it to each stable release that is newer than the current one. Pull requests opened against it are moved to `develop` automatically.
 
-GitHub reads some files only from the default branch: `.github/dependabot.yml`, scheduled workflows, workflows triggered by `workflow_run`, and workflows triggered by `pull_request_target` for pull requests based on `master`. Changes to them take effect when the next release reaches `master`.
+GitHub loads scheduled, `workflow_run`, and `pull_request_target` workflows from the default branch. Changes to those workflow definitions take effect when the next release reaches `master`.
+
+Renovate also reads its configuration from `master`. Enable the Renovate app for this repository after the configuration reaches `master`. Renovate then opens dependency update pull requests against `develop`.
+
+Renovate and the scheduled dependency workflows enable auto-merge for their update PRs. GitHub enforces the required checks before merging.
+The Cap’n Proto workflow regenerates bindings for automated dependency PRs and commits them to the PR branch.
 
 ## Releases
 
@@ -34,7 +39,8 @@ A forward merge:
 
 The version identifies a state of a release line, not a working branch.
 
-* Every pull request targeting a release line MUST bump the version according to the SemVer impact of its change, unless it cannot affect the built program (see below). The impact is measured against the last release tag on that line.
+* Every pull request targeting a release line MUST bump the version according to the SemVer impact of its change, unless an exemption below applies. The impact is measured against the last release tag on that line.
+* Automated dependency update pull requests keep the target branch’s version.
 * Pull requests targeting a feature branch MUST NOT change the version. Feature branches keep the version of the line they were branched from, and pick up its bumps by rebasing or merging as usual. The pull request that merges a feature branch into a release line follows the steps below like any other.
 * `release/*` branches MUST accept only patch-level changes: fixes and changes with no SemVer impact.
 * Pull requests that cannot affect the built program, such as changes to CI workflows, repository configuration under `.github/` and development guidelines, MUST NOT change the version.

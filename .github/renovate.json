@@ -1,0 +1,241 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "customManagers:githubActionsVersions",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "baseBranchPatterns": [
+    "develop"
+  ],
+  "enabledManagers": [
+    "cargo",
+    "github-actions",
+    "custom.regex",
+    "rust-toolchain",
+    "dockerfile"
+  ],
+  "timezone": "Etc/UTC",
+  "labels": [
+    "dependencies"
+  ],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "build",
+  "semanticCommitScope": "deps",
+  "prConcurrentLimit": 1,
+  "rebaseWhen": "behind-base-branch",
+  "packageRules": [
+    {
+      "description": "Label GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "addLabels": [
+        "github-actions"
+      ]
+    },
+    {
+      "description": "Group CodeQL actions",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "github/codeql-action",
+        "github/codeql-action/**"
+      ],
+      "groupName": "codeql-action"
+    },
+    {
+      "description": "Label Cargo updates",
+      "matchManagers": [
+        "cargo"
+      ],
+      "addLabels": [
+        "rust"
+      ]
+    },
+    {
+      "description": "Group all patch updates of Rust crates",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "patch-updates"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "capnp",
+        "capnpc"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "capnp",
+      "description": "Keep the runtime and code generator compatible"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "chrono",
+        "chrono-*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "chrono"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "clap",
+        "clap_*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "clap"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "crossbeam",
+        "crossbeam-*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "crossbeam"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "enumset",
+        "enumset-*",
+        "enumset_*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "enumset"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "pest",
+        "pest_*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "pest"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "unicode-*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "unicode"
+    },
+    {
+      "description": "Tools pinned in workflows via `# renovate:` comments",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "addLabels": [
+        "github-actions"
+      ]
+    },
+    {
+      "description": "Automerge all updates once required checks pass, after a release has had a week to be caught if compromised",
+      "matchPackageNames": [
+        "*"
+      ],
+      "automerge": true,
+      "automergeStrategy": "squash",
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Keep the fork revision that provides clap_mangen::Man::verbatim",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "https://github.com/pamburus/rust-clap.git"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Use `build` commit type for all updates, overriding the per-type defaults from `config:recommended`",
+      "matchPackageNames": [
+        "*"
+      ],
+      "semanticCommitType": "build"
+    },
+    {
+      "description": "Update Cross and its pinned release image together",
+      "matchPackageNames": [
+        "cross",
+        "ghcr.io/cross-rs/x86_64-unknown-linux-gnu"
+      ],
+      "groupName": "cross release tooling"
+    }
+  ],
+  "schedule": [
+    "* */6 * * *"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "GitHub runner labels in matrix entries and expressions, which the github-actions manager does not handle",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "\\bos: (?<depName>ubuntu|macos|windows)-(?<currentValue>[0-9.]+)\\b",
+        "'(?<depName>ubuntu|macos|windows)-(?<currentValue>[0-9.]+)'"
+      ],
+      "datasourceTemplate": "github-runners"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the cross image pinned for the Linux x86-64 release build",
+      "managerFilePatterns": [
+        "/^(?:Cross\\.toml)$/"
+      ],
+      "matchStrings": [
+        "image = \"(?<depName>ghcr\\.io/cross-rs/x86_64-unknown-linux-gnu):(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "gitIgnoredAuthors": [
+    "234988995+missionis[bot]@users.noreply.github.com"
+  ]
+}

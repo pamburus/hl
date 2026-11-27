@@ -8,11 +8,10 @@ on:
   pull_request:
     branches: [master, develop, release/*]
 
+# Pull requests can run action updates, so jobs get only the permissions they need.
 permissions:
   contents: read
-  pull-requests: write
   actions: read
-  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,10 +23,18 @@ defaults:
 
 jobs:
   test:
+    # Preserve the check names used by branch protection when runner images change.
+    name: test (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-26.04
+            platform: ubuntu-latest
+          - os: macos-26
+            platform: macos-latest
+          - os: windows-2025
+            platform: windows-latest
 
     steps:
       - name: Checkout repository
@@ -114,10 +121,18 @@ jobs:
   # Checks that the workspace builds with the minimum Rust version declared in Cargo.toml. The other jobs use the
   # toolchain from rust-toolchain.toml, which is newer.
   msrv:
+    # Preserve the check names used by branch protection when runner images change.
+    name: msrv (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-26.04
+            platform: ubuntu-latest
+          - os: macos-26
+            platform: macos-latest
+          - os: windows-2025
+            platform: windows-latest
 
     env:
       # Warnings are checked with the main toolchain, older ones may report different ones.
@@ -143,7 +158,7 @@ jobs:
         run: cargo +${{ steps.msrv.outputs.version }} check --locked --workspace --all-targets --all-features
 
   stress-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
@@ -178,7 +193,7 @@ jobs:
   perf-gate:
     needs: stress-test
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       # For pull requests, the merge commit and its first parent, the base it is compared with.
@@ -259,7 +274,11 @@ jobs:
           overwrite: true
 
   coverage:
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write # Codecov OIDC upload
+    runs-on: ubuntu-26.04
 
     env:
       # renovate: datasource=crate depName=rustfilt
@@ -292,7 +311,7 @@ jobs:
           use_oidc: true
 
   test-nix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
@@ -305,7 +324,7 @@ jobs:
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: hl
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          authToken: ${{ github.event_name == 'push' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
