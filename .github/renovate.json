@@ -205,22 +205,6 @@
         "ghcr.io/cross-rs/x86_64-unknown-linux-gnu"
       ],
       "groupName": "cross release tooling"
-    },
-    {
-      "description": "Require manual merge for release tooling and privileged workflows",
-      "matchFileNames": [
-        "Cross.toml",
-        ".github/workflows/build.yml",
-        ".github/workflows/release.yml",
-        ".github/workflows/commit-capnp.yml",
-        ".github/workflows/regenerate-capnp.yml",
-        ".github/workflows/security-update.yml",
-        ".github/workflows/nix-update.yml",
-        ".github/workflows/label-resolved-issues.yml",
-        ".github/workflows/perf-gate-report.yml",
-        ".github/workflows/retarget-pr.yml"
-      ],
-      "automerge": false
     }
   ],
   "schedule": [

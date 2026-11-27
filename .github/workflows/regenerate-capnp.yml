@@ -1,11 +1,10 @@
 ---
-name: Prepare dependency update
+name: Regenerate Cap'n Proto bindings
 
 # The generated Cap'n Proto bindings are checked in, and the code they contain is tied to both the
 # `capnpc` crate and the Cap'n Proto compiler that produced them — each records its version in the
 # generated header. A dependency update that moves `capnpc` therefore leaves the checked-in sources
-# stale, and the build script refuses to accept them. This job generates a patch and requests
-# a release-line version bump when the update affects the built program.
+# stale, and the build script refuses to accept them. This job generates a patch for the bot PR.
 #
 # The compiler comes from the nixpkgs revision pinned in `flake.lock` rather than from the runner
 # image, because its version is embedded verbatim in the generated output. An unpinned compiler would
@@ -32,7 +31,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Install pinned toolchain
@@ -43,17 +41,6 @@ jobs:
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-
-      - name: Check for a release-line version bump
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/dependency-update"
-          base=$(git merge-base "$BASE_SHA" HEAD)
-          request=$(python3 scripts/dependency-version.py prepare "$base")
-          if [[ -n "$request" ]]; then
-            printf '%s\n' "$request" > "$RUNNER_TEMP/dependency-update/version-base"
-          fi
 
       - name: Install Nix
         uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
@@ -70,16 +57,16 @@ jobs:
 
       - name: Save a patch for the trusted write-back workflow
         run: |
-          patch="$RUNNER_TEMP/dependency-update/capnp.patch"
+          patch="$RUNNER_TEMP/capnp.patch"
           git diff --no-ext-diff -- src/index_capnp.rs .build/capnp/index.capnp.json > "$patch"
           if [[ ! -s "$patch" ]]; then
             rm "$patch"
           fi
 
-      - name: Upload dependency update artifacts
+      - name: Upload generated binding patch
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: dependency-update
-          path: ${{ runner.temp }}/dependency-update/
+          name: capnp-patch
+          path: ${{ runner.temp }}/capnp.patch
           if-no-files-found: ignore
           retention-days: 1

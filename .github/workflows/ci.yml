@@ -39,8 +39,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -119,23 +117,6 @@ jobs:
 
       - name: Run executable
         run: cargo run --locked
-
-      - name: Check version for automated dependency updates
-        if: >-
-          github.event_name == 'pull_request' &&
-          github.base_ref != 'master' &&
-          matrix.platform == 'ubuntu-latest' &&
-          (github.event.pull_request.user.login == 'renovate[bot]' ||
-           (github.event.pull_request.user.login == 'missionis[bot]' && startsWith(github.head_ref, 'update-')))
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          git fetch --no-tags --depth=1 origin "refs/heads/$DEFAULT_BRANCH"
-          if ! git cat-file -e FETCH_HEAD:scripts/dependency-version.py 2>/dev/null; then
-            echo "::notice::Dependency version enforcement starts when write-back reaches the default branch."
-            exit 0
-          fi
-          python3 scripts/dependency-version.py check HEAD^1
 
   # Checks that the workspace builds with the minimum Rust version declared in Cargo.toml. The other jobs use the
   # toolchain from rust-toolchain.toml, which is newer.

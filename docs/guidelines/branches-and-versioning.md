@@ -17,10 +17,8 @@ GitHub loads scheduled, `workflow_run`, and `pull_request_target` workflows from
 
 Renovate also reads its configuration from `master`. Enable the Renovate app for this repository after the configuration reaches `master`. Renovate then opens dependency update pull requests against `develop`.
 
-Renovate auto-merges routine updates after required checks pass. It leaves release and privileged workflow changes for manual review.
-On automated dependency pull requests, the preparation workflow regenerates Cap’n Proto bindings and requests the next release-line version when the production Cargo dependency graph, Rust toolchain, flake lock, or Cross configuration changes.
-The write-back workflow commits the generated changes on the pull request branch. The required Linux check verifies the version against the target branch.
-During rollout, automated dependency pull requests may keep the current version until the version write-back reaches `master`.
+Renovate and the scheduled dependency workflows enable auto-merge for their update PRs. GitHub enforces the required checks before merging.
+The Cap’n Proto workflow regenerates bindings for automated dependency PRs and commits them to the PR branch.
 
 ## Releases
 
@@ -41,7 +39,8 @@ A forward merge:
 
 The version identifies a state of a release line, not a working branch.
 
-* Every pull request targeting a release line MUST bump the version according to the SemVer impact of its change, unless it cannot affect the built program (see below). The impact is measured against the last release tag on that line.
+* Every pull request targeting a release line MUST bump the version according to the SemVer impact of its change, unless an exemption below applies. The impact is measured against the last release tag on that line.
+* Automated dependency update pull requests keep the target branch’s version.
 * Pull requests targeting a feature branch MUST NOT change the version. Feature branches keep the version of the line they were branched from, and pick up its bumps by rebasing or merging as usual. The pull request that merges a feature branch into a release line follows the steps below like any other.
 * `release/*` branches MUST accept only patch-level changes: fixes and changes with no SemVer impact.
 * Pull requests that cannot affect the built program, such as changes to CI workflows, repository configuration under `.github/` and development guidelines, MUST NOT change the version.

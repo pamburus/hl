@@ -65,19 +65,10 @@ jobs:
             nix
           delete-branch: true
 
-      - name: Generate Auto-Merge GitHub App Token
+      - name: Enable auto-merge
         if: steps.create-pr.outputs.pull-request-number != ''
-        id: generate-automerge-token
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        uses: ./.github/actions/enable-update-automerge
         with:
           client-id: ${{ secrets.AUTOMERGE_APP_ID }}
           private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-
-      - name: Enable auto-merge
-        if: steps.create-pr.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ steps.generate-automerge-token.outputs.token }}
-          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
-        run: gh pr merge --auto --delete-branch --squash "${PR_NUMBER:?}" --repo "$GITHUB_REPOSITORY"
+          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}

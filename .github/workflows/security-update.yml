@@ -65,6 +65,7 @@ jobs:
         run: echo "name=update-security-${TARGET_BRANCH//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Create pull request
+        id: create-pr
         uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
         with:
           token: ${{ steps.generate-token.outputs.token }}
@@ -86,6 +87,14 @@ jobs:
             rust
             security
           delete-branch: true
+
+      - name: Enable auto-merge
+        if: steps.create-pr.outputs.pull-request-number != ''
+        uses: ./.github/actions/enable-update-automerge
+        with:
+          client-id: ${{ secrets.AUTOMERGE_APP_ID }}
+          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
+          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
 
       # A fix that needs an incompatible version cannot be applied automatically
       - name: Fail on remaining vulnerabilities

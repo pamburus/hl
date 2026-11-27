@@ -1,0 +1,30 @@
+name: Enable dependency update auto-merge
+description: Queue a dependency update PR for squash merge after required checks pass
+inputs:
+  client-id:
+    description: Client ID of the auto-merge GitHub App
+    required: true
+  private-key:
+    description: Private key of the auto-merge GitHub App
+    required: true
+  pull-request-number:
+    description: Pull request to auto-merge
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Generate Auto-Merge GitHub App Token
+      id: generate-automerge-token
+      uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ github.repository_owner }}
+        repositories: ${{ github.event.repository.name }}
+
+    - name: Enable auto-merge
+      env:
+        GH_TOKEN: ${{ steps.generate-automerge-token.outputs.token }}
+        PR_NUMBER: ${{ inputs.pull-request-number }}
+      shell: bash
+      run: gh pr merge --auto --delete-branch --squash "${PR_NUMBER:?}" --repo "$GITHUB_REPOSITORY"
