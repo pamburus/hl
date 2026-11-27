@@ -210,7 +210,6 @@
       "description": "Require manual merge for release tooling and privileged workflows",
       "matchFileNames": [
         "Cross.toml",
-        ".github/actions/prepare-release/**",
         ".github/workflows/build.yml",
         ".github/workflows/release.yml",
         ".github/workflows/commit-capnp.yml",
