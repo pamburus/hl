@@ -6,7 +6,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
+  actions: write
 
 defaults:
   run:
@@ -15,7 +17,7 @@ defaults:
 jobs:
   update-lock:
     name: Update flake.lock
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-latest
     env:
       # Scheduled runs and manual runs on master update develop, because master holds only the latest release.
       # Manual runs on any other branch, such as release/*, update that branch.
@@ -25,8 +27,17 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
-          client-id: ${{ secrets.APP_ID }}
+          app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Generate Auto-Merge GitHub App Token
+        id: generate-automerge-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.AUTOMERGE_APP_ID }}
+          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
 
@@ -66,9 +77,9 @@ jobs:
           delete-branch: true
 
       - name: Enable auto-merge
-        if: steps.create-pr.outputs.pull-request-number != ''
-        uses: ./.github/actions/enable-update-automerge
-        with:
-          client-id: ${{ secrets.AUTOMERGE_APP_ID }}
-          private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
-          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
+        id: enable-auto-merge
+        if: steps.create-pr.outputs.pull-request-number
+        run: |
+          gh pr merge --auto -ds ${{ steps.create-pr.outputs.pull-request-number }}
+        env:
+          GH_TOKEN: ${{ steps.generate-automerge-token.outputs.token }}

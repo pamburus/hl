@@ -88,13 +88,22 @@ jobs:
             security
           delete-branch: true
 
-      - name: Enable auto-merge
+      - name: Generate Auto-Merge GitHub App Token
+        id: generate-automerge-token
         if: steps.create-pr.outputs.pull-request-number != ''
-        uses: ./.github/actions/enable-update-automerge
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ secrets.AUTOMERGE_APP_ID }}
           private-key: ${{ secrets.AUTOMERGE_APP_PRIVATE_KEY }}
-          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Enable auto-merge
+        if: steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.generate-automerge-token.outputs.token }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: gh pr merge --auto --delete-branch --squash "${PR_NUMBER:?}" --repo "$GITHUB_REPOSITORY"
 
       # A fix that needs an incompatible version cannot be applied automatically
       - name: Fail on remaining vulnerabilities
