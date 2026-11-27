@@ -2,4 +2,6 @@ coverage:
   status:
     project:
       default:
-        threshold: 0.05
+        # Temporarily loosened from 0.05 for the one-off drop when the macOS-only and Windows-only code started to count.
+        # To be restored right after that change is merged.
+        threshold: 1.5

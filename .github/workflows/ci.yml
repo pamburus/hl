@@ -258,8 +258,18 @@ jobs:
           # Replaces the report of an earlier attempt when the job is re-run.
           overwrite: true
 
-  coverage:
-    runs-on: ubuntu-latest
+  # Each platform compiles code that the others leave out, so coverage is measured on each of them, and Codecov merges the
+  # reports, see the coverage job.
+  coverage-platform:
+    runs-on: ${{ matrix.os }}
+    # Bounds a hanging test, which would otherwise hold the required coverage check for hours.
+    timeout-minutes: 30
+    strategy:
+      # Keeps the report of a platform that succeeded, so that only the failed one has to be run again.
+      fail-fast: false
+      matrix:
+        # The coverage job checks that a report of each of these platforms was uploaded.
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     env:
       # renovate: datasource=crate depName=rustfilt
@@ -282,14 +292,67 @@ jobs:
         with:
           tool: rustfilt@${{ env.RUSTFILT_VERSION }}
 
+      # Runs what `make coverage` runs, so that it does not depend on make on Windows.
       - name: Generate code coverage
         run: |
-          make coverage
+          bash contrib/bin/setup.sh coverage
+          bash build/ci/coverage.sh
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-${{ runner.os }}
+          path: target/lcov.info
+          if-no-files-found: error
+          # Long enough to re-run only a failed platform a few days later.
+          retention-days: 7
+          # Replaces the report of an earlier attempt when the job is re-run.
+          overwrite: true
+
+  # Uploads the reports of all platforms at once, so that Codecov merges them into one report, where a line counts as
+  # covered if any platform covers it. Nothing is uploaded unless all platforms succeed, because a report without some of
+  # them would leave out the code that only they compile. The job runs and fails then, instead of being skipped, because
+  # it is a required check, and a skipped required check counts as passed.
+  coverage:
+    needs: coverage-platform
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check coverage of all platforms
+        env:
+          RESULT: ${{ needs.coverage-platform.result }}
+        run: |
+          if [[ "$RESULT" != success ]]; then
+            echo "::error::Coverage of some platforms is missing, the coverage-platform job ended with: $RESULT"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coverage-*
+          path: target/coverage-reports
+
+      # The artifacts can be missing even after a successful coverage-platform job, when this job is run again after they
+      # expired. Then all jobs have to be run again, re-running only the failed ones does not bring them back.
+      - name: Check coverage reports
+        run: |
+          for platform in Linux macOS Windows; do
+            if [[ ! -s "target/coverage-reports/coverage-$platform/lcov.info" ]]; then
+              echo "::error::The coverage report of $platform is missing, it may have expired: re-run all jobs"
+              exit 1
+            fi
+          done
 
       - name: Upload coverage to codecov.io
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           use_oidc: true
+          directory: target/coverage-reports
 
   test-nix:
     runs-on: ubuntu-latest
