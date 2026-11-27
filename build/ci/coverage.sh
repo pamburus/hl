@@ -5,18 +5,36 @@ set -e
 export RUSTFLAGS="-C instrument-coverage"
 export CARGO_TARGET_DIR="target/coverage"
 export LLVM_PROFILE_FILE="target/coverage/test-%m-%p.profraw"
-export MAIN_EXECUTABLE="target/coverage/debug/hl"
 unset HL_PAGER
 unset PAGER
 
-LLVM_BIN=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's|host: ||p')/bin
+HOST=$(rustc -vV | sed -n 's|host: ||p')
+LLVM_BIN=$(rustc --print sysroot)/lib/rustlib/${HOST:?}/bin
+
+case "$HOST" in
+    *-windows-*)
+        WINDOWS=true
+        EXE_SUFFIX=.exe
+        # The repository root as the native Windows path, such as C:/src/hl, which the paths of the coverage data start
+        # with, with backslashes instead.
+        ROOT=$(pwd -W)
+        ;;
+    *)
+        WINDOWS=false
+        EXE_SUFFIX=
+        # The repository root without symbolic links, as in the paths of the coverage data.
+        ROOT=$(pwd -P)
+        ;;
+esac
+
+export MAIN_EXECUTABLE="target/coverage/debug/hl${EXE_SUFFIX}"
 
 LLVM_PROFILE_PATTERN="target/coverage/test-*.profraw"
 PROFDATA_FILE="target/coverage.profdata"
-# The repository root, without symbolic links as in the paths of the coverage data, with the characters that have a
-# special meaning in a regular expression escaped.
-ROOT_REGEX=$(pwd -P | sed -e 's/\\/\\\\/g' -e 's/[].*^$+?(){}|[]/\\&/g')
+# The repository root, with the characters that have a special meaning in a regular expression escaped.
+ROOT_REGEX=$(echo "$ROOT" | sed -e 's/\\/\\\\/g' -e 's/[].*^$+?(){}|[]/\\&/g')
 
+# Each `/` matches either path separator, see below.
 IGNORE=(
     '/.cargo/'
     '/.rustup/'
@@ -27,19 +45,25 @@ IGNORE=(
     "^${ROOT_REGEX}/tests/"
     '/crates/styled-help/src/'
 )
+# The paths of the coverage data use backslashes on Windows.
+IGNORE=("${IGNORE[@]//\//[/\\]}")
 
 function executables() {
     echo ${MAIN_EXECUTABLE:?}
     cargo test --workspace --tests --no-run --message-format=json \
     | jq -r 'select(.profile.test == true) | .filenames[]' \
-    | grep -v dSYM -
+    | tr -d '\r' \
+    | grep -v -e dSYM -e '\.pdb$' -
 }
 
 LLVM_COV_FLAGS=(
     "${IGNORE[@]/#/--ignore-filename-regex=}"
     "--instr-profile=${PROFDATA_FILE:?}"
-    $(executables | xargs -I {} echo -object {})
 )
+# Read line by line, so that the backslashes of Windows paths are kept.
+while IFS= read -r executable; do
+    LLVM_COV_FLAGS+=(-object "$executable")
+done < <(executables)
 
 function clean() {
     rm -f \
@@ -50,7 +74,12 @@ function clean() {
 function check_hash() {
     local expected="$1"
     local actual
-    actual=$(shasum -a 256 | cut -d' ' -f1)
+    # Git Bash on Windows has no shasum, and older versions of macOS have no sha256sum.
+    if command -v sha256sum > /dev/null; then
+        actual=$(sha256sum | cut -d' ' -f1)
+    else
+        actual=$(shasum -a 256 | cut -d' ' -f1)
+    fi
     if [ "$actual" != "$expected" ]; then
         echo "${BASH_SOURCE[1]}:${BASH_LINENO[0]}: Hash mismatch: expected $expected, got $actual" >&2
         return 1
@@ -165,8 +194,11 @@ function test() {
     HL_PAGER=cat HL_PAGER_DELIMITER=nul ${MAIN_EXECUTABLE:?} --config - sample/prometheus.log --paging always > /dev/null
     # Test multiple records in a single CRLF-delimited chunk (covers inter-record delimiter path)
     printf '{"level":"info","msg":"a"}\n{"level":"info","msg":"b"}\r\n' | ${MAIN_EXECUTABLE:?} --config - --delimiter crlf --color never > /dev/null
-    # Test signal handling
-    test_signals
+    # Test signal handling. On Windows, hl handles Ctrl-C console events only, which a script cannot send, and kill
+    # terminates the process without letting it handle anything.
+    if [ "$WINDOWS" = false ]; then
+        test_signals
+    fi
 
     # Test delimiter options with combined fixture containing all log formats
     local fixture="src/testing/assets/fixtures/delimiter/combined.log"
@@ -219,11 +251,23 @@ function test() {
 }
 
 function merge() {
-    "${LLVM_BIN:?}/llvm-profdata" merge \
-        -o ${PROFDATA_FILE:?} \
-        -sparse \
-        ${LLVM_PROFILE_PATTERN:?} \
-        crates/*/${LLVM_PROFILE_PATTERN:?}
+    local output status=0
+    output=$(
+        "${LLVM_BIN:?}/llvm-profdata" merge \
+            -o ${PROFDATA_FILE:?} \
+            -sparse \
+            ${LLVM_PROFILE_PATTERN:?} \
+            crates/*/${LLVM_PROFILE_PATTERN:?} \
+            2>&1
+    ) || status=$?
+    if [ -n "$output" ]; then
+        echo "$output" >&2
+    fi
+    # Detected by its error rather than by the target, so that the hint goes away once the bug is fixed.
+    if [ $status != 0 ] && grep -q 'symbol name is empty' <<< "$output"; then
+        echo "${BASH_SOURCE[0]}: The profiles have no function names, as with https://github.com/rust-lang/rust/issues/150123, which breaks coverage on aarch64-pc-windows-msvc. Try the x86_64 toolchain, which runs emulated, for example: RUSTUP_TOOLCHAIN=$(rustc -vV | sed -n 's|release: ||p')-x86_64-pc-windows-msvc" >&2
+    fi
+    return $status
 }
 
 function report() {

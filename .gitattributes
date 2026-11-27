@@ -1,2 +1,5 @@
 # Ensure justfile always uses LF line endings
 justfile text eol=lf
+
+# Keep the line endings of fixtures whose exact bytes the tests depend on
+src/testing/assets/fixtures/delimiter/** -text
