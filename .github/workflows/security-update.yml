@@ -1,8 +1,9 @@
-name: Update dependencies
+name: Fix vulnerable dependencies
 
+# Renovate updates direct dependencies. Other crates in the lockfile change only to fix a known vulnerability.
 on:
   schedule:
-    - cron: "00 17 * * FRI" # Every Friday at 17:00 UTC
+    - cron: "00 17 * * *" # Every day at 17:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -15,13 +16,14 @@ defaults:
     shell: bash -euo pipefail {0}
 
 jobs:
-  update-dependencies:
-    name: Update dependencies
-    runs-on: ubuntu-latest
+  fix-vulnerabilities:
+    name: Fix vulnerable dependencies
+    runs-on: ubuntu-26.04
     env:
-      # Scheduled runs and manual runs on master update develop, because master holds only the latest release.
-      # Manual runs on any other branch, such as release/*, update that branch.
+      # Scheduled runs and dispatches on master target develop. Dispatches on release branches target that line.
       TARGET_BRANCH: ${{ (github.event_name == 'schedule' || github.ref_name == 'master') && 'develop' || github.ref_name }}
+      # renovate: datasource=crate depName=cargo-audit
+      CARGO_AUDIT_VERSION: "0.23.0"
     steps:
       - name: Generate GitHub App Token
         id: generate-token
@@ -45,29 +47,43 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.TARGET_BRANCH }}
-          token: ${{ steps.generate-token.outputs.token }}
+          persist-credentials: false
 
-      - name: Run cargo update
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
+        with:
+          tool: cargo-audit@${{ env.CARGO_AUDIT_VERSION }}
+
+      - name: Update vulnerable crates
         id: update
         run: |
-          cargo update 2> >(tee /dev/stderr) | ./scripts/cargo-update-filter.sh > /tmp/cargo-update.log
+          ./scripts/cargo-audit-fix.sh 2> >(tee /dev/stderr) | ./scripts/cargo-update-filter.sh > /tmp/cargo-update.log
           echo "log=$(jq -Rs . < /tmp/cargo-update.log)" >> ${GITHUB_OUTPUT}
           echo "table=$(./scripts/cargo-update-to-table.sh < /tmp/cargo-update.log | jq -Rs .)" >> ${GITHUB_OUTPUT}
+          if cargo audit; then
+            echo "resolved=true" >> ${GITHUB_OUTPUT}
+          else
+            echo "resolved=false" >> ${GITHUB_OUTPUT}
+          fi
+
+      - name: Choose pull request branch
+        id: pr-branch
+        run: echo "name=update-security-${TARGET_BRANCH//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Create pull request
         id: create-pr
         uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
         with:
           token: ${{ steps.generate-token.outputs.token }}
-          base: ${{ env.TARGET_BRANCH }}
           commit-message: |
-            build(deps): update dependencies
+            build(deps): fix vulnerable dependencies
 
             ${{ fromJSON(steps.update.outputs.log) }}
-          branch: update-${{ github.run_number }}-${{ github.run_id }}
-          title: "build(deps): update dependencies"
+          base: ${{ env.TARGET_BRANCH }}
+          branch: ${{ steps.pr-branch.outputs.name }}
+          title: "build(deps): fix vulnerable dependencies"
           body: |
-            Updates dependencies to latest versions per Cargo.toml constraints.
+            Updates crates with known vulnerabilities to the latest versions per Cargo.toml constraints.
 
             ${{ fromJSON(steps.update.outputs.table) }}
           author: "missionis[bot] <234988995+missionis[bot]@users.noreply.github.com>"
@@ -75,6 +91,7 @@ jobs:
           labels: |
             dependencies
             rust
+            security
           delete-branch: true
 
       - name: Enable auto-merge
@@ -84,3 +101,10 @@ jobs:
           gh pr merge --auto -ds ${{ steps.create-pr.outputs.pull-request-number }}
         env:
           GH_TOKEN: ${{ steps.generate-automerge-token.outputs.token }}
+
+      # A fix that needs an incompatible version cannot be applied automatically
+      - name: Fail on remaining vulnerabilities
+        if: steps.update.outputs.resolved == 'false'
+        run: |
+          echo "::error::vulnerabilities remain after the update"
+          exit 1

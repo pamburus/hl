@@ -30,9 +30,6 @@
       ],
       "addLabels": [
         "github-actions"
-      ],
-      "schedule": [
-        "* 4-7 * * 1"
       ]
     },
     {
@@ -47,41 +44,23 @@
       "groupName": "codeql-action"
     },
     {
-      "description": "Tools pinned in workflows via `# renovate:` comments",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "addLabels": [
-        "github-actions"
-      ],
-      "schedule": [
-        "* 4-7 * * 1"
-      ]
-    },
-    {
-      "description": "Update the Rust toolchain with the CI tools",
-      "matchManagers": [
-        "rust-toolchain"
-      ],
-      "addLabels": [
-        "rust"
-      ],
-      "schedule": [
-        "* 4-7 * * 1"
-      ]
-    },
-    {
       "description": "Label Cargo updates",
       "matchManagers": [
         "cargo"
       ],
       "addLabels": [
         "rust"
+      ]
+    },
+    {
+      "description": "Group all patch updates of Rust crates",
+      "matchManagers": [
+        "cargo"
       ],
-      "schedule": [
-        "* 18-21 * * 5"
+      "matchUpdateTypes": [
+        "patch"
       ],
-      "rangeStrategy": "bump"
+      "groupName": "patch-updates"
     },
     {
       "matchManagers": [
@@ -96,71 +75,100 @@
         "minor"
       ],
       "groupName": "capnp",
-      "description": "The runtime and code generator must move together to keep the checked-in bindings compatible"
+      "description": "Keep the runtime and code generator compatible"
     },
     {
-      "description": "The weekly Cargo lockfile workflow handles compatible patch updates",
-      "matchManagers": [
-        "cargo"
-      ],
-      "matchUpdateTypes": [
-        "patch"
-      ],
-      "enabled": false
-    },
-    {
-      "description": "Keep the existing minor-update exclusions for Cargo manifests",
       "matchManagers": [
         "cargo"
       ],
       "matchPackageNames": [
-        "anstream",
-        "anyhow",
-        "assert_matches",
-        "clap",
-        "clap_complete",
-        "const-str",
-        "derive_more",
-        "dirs",
-        "enum-map",
-        "enumset",
-        "flate2",
-        "fnv",
-        "humantime",
-        "itoa",
-        "known-folders",
-        "kqueue",
-        "maplit",
-        "memchr",
-        "notify",
-        "num_cpus",
-        "once_cell",
-        "owo-colors",
-        "pest",
-        "pest_derive",
-        "regex",
-        "rust-embed",
-        "semver",
-        "serde",
-        "serde_json",
-        "serde_plain",
-        "shellwords",
-        "snap",
-        "static_assertions",
-        "thiserror",
-        "titlecase",
-        "toml",
-        "unicode-segmentation",
-        "ureq",
-        "utf8-supported",
-        "wild",
-        "wildmatch",
-        "yaml-peg"
+        "chrono",
+        "chrono-*"
       ],
       "matchUpdateTypes": [
+        "major",
         "minor"
       ],
-      "enabled": false
+      "groupName": "chrono"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "clap",
+        "clap_*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "clap"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "crossbeam",
+        "crossbeam-*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "crossbeam"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "enumset",
+        "enumset-*",
+        "enumset_*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "enumset"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "pest",
+        "pest_*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "pest"
+    },
+    {
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "unicode-*"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "groupName": "unicode"
+    },
+    {
+      "description": "Tools pinned in workflows via `# renovate:` comments",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "addLabels": [
+        "github-actions"
+      ]
     },
     {
       "description": "Automerge all updates once required checks pass, after a release has had a week to be caught if compromised",
@@ -172,11 +180,38 @@
       "minimumReleaseAge": "7 days"
     },
     {
+      "description": "The first-party rust-clap revision has no release timestamp",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "https://github.com/pamburus/rust-clap.git"
+      ],
+      "minimumReleaseAge": "0 days"
+    },
+    {
       "description": "Use `build` commit type for all updates, overriding the per-type defaults from `config:recommended`",
       "matchPackageNames": [
         "*"
       ],
       "semanticCommitType": "build"
+    }
+  ],
+  "schedule": [
+    "* */6 * * *"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "GitHub runner labels in matrix entries and expressions, which the github-actions manager does not handle",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "\\bos: (?<depName>ubuntu|macos|windows)-(?<currentValue>[0-9.]+)\\b",
+        "'(?<depName>ubuntu|macos|windows)-(?<currentValue>[0-9.]+)'"
+      ],
+      "datasourceTemplate": "github-runners"
     }
   ]
 }

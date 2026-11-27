@@ -24,7 +24,7 @@ defaults:
 jobs:
   prepare-release:
     name: Prepare Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       # renovate: datasource=crate depName=cargo-quickinstall
       CARGO_QUICKINSTALL_VERSION: "0.3.53"
@@ -175,7 +175,7 @@ jobs:
 
   finalize-release:
     name: Finalize Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [prepare-release, build]
 
     steps:
