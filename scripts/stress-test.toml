@@ -68,9 +68,6 @@ scale = "input"
 cpu = "linear"
 rss = { default = "constant", sort-stdin = "linear", sort-gz = "linear" }
 
-[cases.known]
-"follow-file.rss" = { issue = "#1700", os = ["linux"], intermittent = true }
-
 [[cases]]
 name = "split-record"
 about = "A short record written in two parts, the first one written with enough complete records to reach the limit"

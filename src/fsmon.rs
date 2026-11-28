@@ -11,7 +11,7 @@ pub type EventKind = notify::EventKind;
 
 // ---
 
-pub fn run<H>(mut paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+pub fn run<H>(mut paths: Vec<PathBuf>, handle: H) -> Result<()>
 where
     H: FnMut(Event) -> Result<()>,
 {
@@ -45,14 +45,30 @@ where
     watch.sort_unstable();
     watch.dedup();
 
-    imp::run(watch, |event| {
-        if event.paths.iter().any(|path| paths.binary_search(path).is_ok()) {
-            handle(event)
-        } else {
-            Ok(())
-        }
-    })
+    imp::run(watch, Filter { paths }, handle)
 }
+
+// ---
+
+/// Tells which events are worth handling.
+struct Filter {
+    /// The files watched, sorted.
+    paths: Vec<PathBuf>,
+}
+
+impl Filter {
+    /// Returns whether `event` is about one of the files watched and can change what is read from it.
+    ///
+    /// A watched directory brings the events of all files in it, and every read of a file brings an access event.
+    fn accepts(&self, event: &Event) -> bool {
+        !event.kind.is_access() && event.paths.iter().any(|path| self.paths.binary_search(path).is_ok())
+    }
+}
+
+// ---
+
+#[cfg(not(target_os = "macos"))]
+mod queue;
 
 #[cfg(windows)]
 mod windows;
@@ -61,33 +77,32 @@ use windows as imp;
 
 #[cfg(not(any(target_os = "macos", windows)))]
 mod imp {
-    use std::sync::mpsc::{self};
-    use std::time::Duration;
+    use std::{sync::Arc, time::Duration};
 
     use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 
-    use super::*;
-    use crate::error::Error;
+    use super::{queue::Queue, *};
 
     const FALLBACK_POLLING_INTERVAL: Duration = Duration::from_secs(1);
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, filter: Filter, mut handle: H) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
-        let (tx, rx) = mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL))?;
+        let queue = Arc::new(Queue::new(filter));
+        let push = {
+            let queue = queue.clone();
+            move |event| queue.push(event)
+        };
+        let config = Config::default().with_poll_interval(FALLBACK_POLLING_INTERVAL);
+        let mut watcher = RecommendedWatcher::new(push, config)?;
 
         for path in &paths {
             watcher.watch(path, RecursiveMode::NonRecursive)?;
         }
 
         loop {
-            match rx.recv() {
-                Ok(Ok(event)) => handle(event)?,
-                Ok(Err(err)) => return Err(err.into()),
-                Err(err) => return Err(Error::RecvTimeoutError { source: err.into() }),
-            };
+            handle(queue.pop()?)?;
         }
     }
 }
@@ -101,7 +116,7 @@ mod imp {
 
     use super::*;
 
-    pub fn run<H>(paths: Vec<PathBuf>, mut handle: H) -> Result<()>
+    pub fn run<H>(paths: Vec<PathBuf>, filter: Filter, mut handle: H) -> Result<()>
     where
         H: FnMut(Event) -> Result<()>,
     {
@@ -125,7 +140,10 @@ mod imp {
                 if watcher.add_filename(path, EventFilter::EVFILT_VNODE, flags).is_ok() {
                     added.insert(path);
                     if !synced {
-                        handle(Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone()))?;
+                        let event = Event::new(EventKind::Create(CreateKind::Any)).add_path(path.clone());
+                        if filter.accepts(&event) {
+                            handle(event)?;
+                        }
                     }
                 }
             }
@@ -180,7 +198,9 @@ mod imp {
                             #[allow(unreachable_patterns)]
                             _ => Event::new(EventKind::Other),
                         };
-                        handle(event)?;
+                        if filter.accepts(&event) {
+                            handle(event)?;
+                        }
                     }
                     _ => unreachable!(),
                 };
@@ -188,3 +208,6 @@ mod imp {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
