@@ -1,6 +1,9 @@
 use yaml::serde as yaml;
 
-use super::super::super::{Color, Element, MergeWithOptions, Mode, PlainColor, tests::modes};
+use super::super::super::{
+    Color, Element, MergeWithOptions, Mode, PlainColor,
+    tests::{modes, yaml_fixture},
+};
 use super::super::{MergeOptions, Style, Version};
 use super::StylePack;
 
@@ -8,8 +11,7 @@ use super::StylePack;
 fn test_style_pack() {
     assert_eq!(StylePack::<Element>::default().len(), 0);
 
-    let yaml = include_str!("../../../testing/assets/fixtures/style-packs/pack1.yaml");
-    let pack: StylePack<Element> = yaml::from_str(yaml).unwrap().remove(0);
+    let pack: StylePack<Element> = yaml_fixture!("style-packs/pack1.yaml");
     assert_eq!(pack.len(), 2);
     assert_eq!(pack[&Element::Input].foreground, Some(Color::Plain(PlainColor::Red)));
     assert_eq!(pack[&Element::Input].background, Some(Color::Plain(PlainColor::Blue)));
