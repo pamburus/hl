@@ -1,5 +1,29 @@
 use super::*;
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex, mpsc},
+    time::Duration,
+};
+
+/// How long a test waits for something that should happen at once, so a bug makes it fail instead of hang.
+const HANG_GUARD: Duration = Duration::from_secs(10);
+
+/// A value whose drop reports that it has started, then waits for the gate to open before it completes.
+///
+/// If the gate is not opened in time, the drop returns without completing.
+struct GatedDrop {
+    started: mpsc::Sender<()>,
+    gate: mpsc::Receiver<()>,
+    completed: Arc<Mutex<bool>>,
+}
+
+impl Drop for GatedDrop {
+    fn drop(&mut self) {
+        self.started.send(()).ok();
+        if self.gate.recv_timeout(HANG_GUARD).is_ok() {
+            *self.completed.lock().unwrap() = true;
+        }
+    }
+}
 
 #[test]
 fn drop_notifier_calls_notify_on_drop() {
@@ -68,32 +92,21 @@ fn async_drop_drops_value_in_background() {
 
 #[test]
 fn async_drop_waits_for_completion() {
-    let started = Arc::new(Mutex::new(false));
-    let started_clone = Arc::clone(&started);
+    let (started_tx, started_rx) = mpsc::channel();
+    let (gate_tx, gate_rx) = mpsc::channel();
     let completed = Arc::new(Mutex::new(false));
-    let completed_clone = Arc::clone(&completed);
-
-    struct SlowDrop {
-        started: Arc<Mutex<bool>>,
-        completed: Arc<Mutex<bool>>,
-    }
-
-    impl Drop for SlowDrop {
-        fn drop(&mut self) {
-            *self.started.lock().unwrap() = true;
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            *self.completed.lock().unwrap() = true;
-        }
-    }
 
     {
-        let slow_drop = SlowDrop {
-            started: started_clone,
-            completed: completed_clone,
-        };
-        let _async_drop = AsyncDrop::new(slow_drop);
+        let _async_drop = AsyncDrop::new(GatedDrop {
+            started: started_tx,
+            gate: gate_rx,
+            completed: Arc::clone(&completed),
+        });
+        started_rx.recv_timeout(HANG_GUARD).expect("the value was not dropped");
+        // Not completed yet, so dropping `_async_drop` must wait for the rest of the drop.
+        assert!(!*completed.lock().unwrap(), "the drop did not wait for the gate");
+        gate_tx.send(()).expect("the drop stopped waiting for the gate");
     }
 
-    assert!(*started.lock().unwrap());
     assert!(*completed.lock().unwrap());
 }
