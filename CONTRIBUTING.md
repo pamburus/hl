@@ -116,7 +116,7 @@ The `master` branch holds only the latest release and does not accept pull reque
 - **Bump the version** when the change can affect the built program, see [Versioning of pull requests](docs/guidelines/branches-and-versioning.md#versioning-of-pull-requests)
 - **Update the specifications**: Every change of behavior, including a bug fix, leaves the specs under `specs/` describing the behavior after it, see [Specifications](docs/guidelines/specifications.md#behavior-changes)
 - **Update documentation**: If your changes affect user-facing behavior
-- **Add tests**: For new features or bug fixes when applicable
+- **Add tests**: For new features or bug fixes when applicable, placed and written as the [Test Placement Requirements](.specify/memory/constitution.md#v-test-first-development--quality) of the constitution say: which tests are unit tests and which are integration tests, where each goes, and where their helpers go
 - **Keep the PR description clear**: Explain the problem and your solution
 
 ### Unrelated Issues

@@ -42,7 +42,8 @@ IGNORE=(
     'rustc/.*/library/'
     '_capnp\.rs$'
     '/tests\.rs$'
-    "^${ROOT_REGEX}/tests/"
+    # The integration tests of every crate.
+    "^${ROOT_REGEX}/(.*/)?tests/"
     '/crates/styled-help/src/'
 )
 # The paths of the coverage data use backslashes on Windows.

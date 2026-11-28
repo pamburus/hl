@@ -1,15 +1,16 @@
 <!--
 Sync Impact Report:
-- Version: 2.4.0 → 2.5.0
+- Version: 2.5.0 → 2.6.0
 - Modified Sections:
-  - VI. Specification & Cross-Reference Integrity: every change of behavior, including a bug fix, now leaves the specifications describing the behavior after it, in the same pull request, and a behavior is checked against its spec before it is reported or treated as a bug.
-- Rationale: MINOR version bump. New requirements are added; no principle is removed or redefined.
+  - V. Test-First Development & Quality, Test Placement Requirements: unit tests no longer interact with the OS or the environment, and every test that does is an integration test; unit tests do not wait for wall-clock time and mock time instead; the placement of tests of `mod.rs` and crate root modules is stated; the integration tests of each crate go to that crate.
+  - V. Test-First Development & Quality, Coverage Validation Requirements: code that interacts with the environment is covered by integration tests instead of being left uncovered.
+- Rationale: MINOR version bump. Requirements are added and extended; no principle is removed.
 - Templates requiring updates:
-  - ✅ plan-template.md: Compatible - plans start from a spec
-  - ✅ spec-template.md: Compatible - the amendment lines are added to a spec when it is first amended
-  - ✅ tasks-template.md: Compatible - no spec maintenance steps
-- Follow-up TODOs: none
-- Date: 2026-11-25
+  - ✅ plan-template.md: Compatible - no test placement rules
+  - ✅ spec-template.md: Compatible - no test placement rules
+  - ✅ tasks-template.md: Compatible - test paths are given per project
+- Follow-up TODOs: move the existing unit tests that use the file system to integration tests or to in-memory file systems, and replace the sleep in the lifecycle crate's unit tests with mocked time
+- Date: 2026-11-28
 -->
 
 # hl (High-performance Log viewer) Constitution
@@ -54,21 +55,29 @@ This ensures:
 
 **Coverage Validation Requirements:**
 After implementing any new feature, run `just uncovered` to identify changed lines lacking test coverage. If uncovered lines appear:
-- MUST add tests to cover them unless they require environmental interaction (file I/O, network, OS-specific behavior)
-- Document why coverage cannot be added if environmental interaction prevents testing
+- MUST add tests to cover them: unit tests, or integration tests for code that interacts with the OS or the environment (file I/O, network, OS-specific behavior), see Test Placement Requirements below
+- Document why coverage cannot be added if neither kind of test can reach the code
 - Aim to maintain or improve overall project coverage percentage
 
 This ensures new features are properly tested and maintains the high-quality bar established by existing code.
 
 **Test Placement Requirements:**
-- All tests of a module, including property-based tests, MUST be in a `tests.rs` file in the module's directory (`foo.rs` → `foo/tests.rs`), declared at the end of the module as `#[cfg(test)] mod tests;`
+- Tests are either unit tests or integration tests. A test that interacts with the OS or the environment in any way is an integration test. This includes the file system (also reading files of the repository at run time), environment variables, the current directory, processes, signals, terminals and the network
+- Unit tests MUST NOT interact with the OS or the environment. Code under test that needs them takes them through an abstraction that the test replaces with an in-memory implementation, such as `vfs::mem::FileSystem`. Test data is embedded at compile time, for example with `include_str!`
+- Unit tests MUST NOT wait for wall-clock time to pass, for example by sleeping or by waiting for a timeout or an interval to expire. Logic that depends on time takes the current time or a clock from its caller, and the test passes explicit instants, such as a base instant read once plus offsets, or a mock clock. A timeout that only guards a test against hanging, such as `recv_timeout`, is allowed, because it waits only when the test fails
+- All unit tests of a module, including property-based tests, MUST be in a `tests.rs` file in the module's directory, declared at the end of the module as `#[cfg(test)] mod tests;`:
+  - `a/b.rs` → `a/b/tests.rs`
+  - `a/b/mod.rs` → `a/b/tests.rs`
+  - `lib.rs`, or `main.rs` of a crate without `lib.rs` → `tests.rs` next to it; in a crate with both, `main.rs` has no unit tests of its own, and the logic to test goes to the library or to submodules of the binary
 - Test modules with other names or in other places MUST NOT be added
 - Test helpers shared by several modules belong in the `testing` module
-- Integration tests, which run the `hl` binary and use the OS, are the exception: they MUST be modules of the one test binary in `tests/integration/` (`tests/integration/main.rs`), one module per area, with the helpers they share in `tests/integration/support/`
+- Integration tests are the exception: they MUST be modules of the one test binary in `tests/integration/` (`tests/integration/main.rs`) of the crate they test, one module per area, with the helpers they share in its `tests/integration/support/`:
+  - the `hl` crate at the repository root → `tests/integration/`
+  - a crate in `crates/some/crate/` → `crates/some/crate/tests/integration/`, never the `tests/` directory of the root crate
 - Supporting code in a `tests.rs` file, such as helper functions, types, trait implementations and constants, MUST be placed at the beginning of the module, after the imports and before the first test function, never between test functions
-- All `tests.rs` files and the integration tests MUST be excluded from coverage reports, so that coverage measures only the code under test
+- All `tests.rs` files and the integration tests of every crate MUST be excluded from coverage reports, so that coverage measures only the code under test
 
-This keeps tests and their helpers easy to find and keeps test code from inflating coverage.
+This keeps tests and their helpers easy to find, keeps unit tests fast, deterministic and independent of the machine they run on, and keeps test code from inflating coverage.
 
 ### VI. Specification & Cross-Reference Integrity
 <!-- Maintain referential integrity across all documentation and code -->
@@ -138,4 +147,4 @@ This constitution supersedes all other practices and informal conventions. All P
 3. Documentation of rationale
 4. Migration plan for any breaking changes
 
-**Version**: 2.5.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-11-25
+**Version**: 2.6.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2026-11-28
