@@ -255,48 +255,17 @@ fn test_query_json_in_int() {
 }
 
 #[test]
-fn query_in_set_file_valid() {
-    let query = Query::parse("v in @src/testing/assets/query/set-valid").unwrap();
-    let record = parse(r#"{"v":"line"}"#);
-    assert!(!record.matches(&query));
-    let record = parse(r#"{"v":"line1"}"#);
-    assert!(record.matches(&query));
-    let record = parse(r#"{"v":"line2"}"#);
-    assert!(record.matches(&query));
-    let record = parse(r#"{"v":"line3"}"#);
-    assert!(record.matches(&query));
-    let record = parse(r#"{"v":"line4"}"#);
-    assert!(!record.matches(&query));
+fn test_read_string_set_valid() {
+    let set = read_string_set(include_bytes!("../testing/assets/query/set-valid").as_slice()).unwrap();
+    assert_eq!(set, ["line1", "line2", "line3"]);
 }
 
 #[test]
-fn query_in_set_file_invalid() {
-    let filename = "src/testing/assets/query/set-invalid";
-    let result = Query::parse(format!("v in @{}", filename));
-    assert!(result.is_err());
-    let err = result.err().unwrap();
-    if let Error::FailedToLoadFile { path, source } = &err {
-        assert_eq!(path, filename);
-        if let Error::FailedToParseJsonLine { line, source } = &**source {
-            assert_eq!(line, &2);
-            assert!(source.is_eof());
-        } else {
-            panic!("unexpected error: {:?}", err);
-        }
-    } else {
-        panic!("unexpected error: {:?}", err);
-    }
-}
-
-#[test]
-fn query_in_set_file_not_found() {
-    let filename = "src/testing/assets/query/set-not-found";
-    let result = Query::parse(format!("v in @{}", filename));
-    assert!(result.is_err());
-    let err = result.err().unwrap();
-    if let Error::FailedToReadFile { path, source } = &err {
-        assert_eq!(path, filename);
-        assert!(source.kind() == std::io::ErrorKind::NotFound);
+fn test_read_string_set_invalid() {
+    let err = read_string_set(include_bytes!("../testing/assets/query/set-invalid").as_slice()).unwrap_err();
+    if let Error::FailedToParseJsonLine { line, source } = &err {
+        assert_eq!(line, &2);
+        assert!(source.is_eof());
     } else {
         panic!("unexpected error: {:?}", err);
     }

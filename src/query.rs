@@ -307,7 +307,15 @@ fn parse_string_set_file(pair: Pair<Rule>) -> Result<Vec<String>> {
             source: e,
         })?)
     };
-    BufReader::new(stream)
+    read_string_set(BufReader::new(stream)).map_err(|e| Error::FailedToLoadFile {
+        path: filename.clone(),
+        source: Box::new(e),
+    })
+}
+
+/// Reads a set of strings, one per line, each either a JSON string or taken as it is.
+fn read_string_set(reader: impl BufRead) -> Result<Vec<String>> {
+    reader
         .lines()
         .enumerate()
         .map(|(i, line)| {
@@ -319,10 +327,6 @@ fn parse_string_set_file(pair: Pair<Rule>) -> Result<Vec<String>> {
             }
         })
         .collect::<Result<Vec<_>>>()
-        .map_err(|e| Error::FailedToLoadFile {
-            path: filename.clone(),
-            source: Box::new(e),
-        })
 }
 
 fn parse_number(pair: Pair<Rule>) -> Result<Number> {

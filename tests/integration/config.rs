@@ -1,13 +1,8 @@
 //! Loading of the configuration from files of the OS.
 
-use std::path::{Path, PathBuf};
-
 use hl::config;
 
-/// The path of `file` in the repository.
-fn repo_file(file: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(file)
-}
+use crate::support::repo::repo_file;
 
 #[test]
 fn test_load_toml_file() {
