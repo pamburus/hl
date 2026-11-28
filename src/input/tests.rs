@@ -653,3 +653,11 @@ fn test_input_holder_metadata_describes_held_file_after_rotation() {
 
     assert_eq!(meta.unwrap().map(|x| x.len()), Some(9));
 }
+
+#[test]
+fn test_input_holder_of_stdin_has_no_metadata_and_no_file() {
+    let holder = InputHolder::new(InputReference::Stdin, None);
+    assert!(holder.metadata().unwrap().is_none());
+    assert!(holder.file().is_none());
+    assert!(holder.into_file().is_err());
+}

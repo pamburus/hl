@@ -2,7 +2,7 @@
 use std::ops::Range;
 
 // relative imports
-use super::{Delimit, NewlineSearcher, Search, SearchProgress};
+use super::{Delimit, NewlineSearcher, Search};
 
 #[derive(Clone)]
 pub struct PrettyCompatibleDelimiter;
@@ -20,12 +20,11 @@ impl Delimit for PrettyCompatibleDelimiter {
 /// surrounded by lines starting with non-whitespace characters.
 pub struct PrettyCompatibleSearcher;
 
-impl PrettyCompatibleSearcher {
-    /// Searches for the last delimiter in the buffer with its line feed at `from` or later.
+impl Search for PrettyCompatibleSearcher {
     #[inline]
-    fn search_r_from(&self, buf: &[u8], edge: bool, from: usize) -> Option<Range<usize>> {
+    fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
         let mut r = buf.len();
-        while let Some(range) = NewlineSearcher::search_r_from(&buf[..r], from.min(r)) {
+        while let Some(range) = NewlineSearcher.search_r(&buf[..r], edge) {
             if edge && range.end == buf.len() {
                 return Some(range);
             }
@@ -38,24 +37,6 @@ impl PrettyCompatibleSearcher {
             r = range.start;
         }
         None
-    }
-}
-
-impl Search for PrettyCompatibleSearcher {
-    #[inline]
-    fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        self.search_r_from(buf, edge, 0)
-    }
-
-    #[inline]
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        let found = self.search_r_from(buf, true, progress.from);
-        if found.is_none() {
-            // A new line in the searched data is either followed there by a character that keeps it from being a delimiter,
-            // or it ends the searched data and would have been found as a delimiter at the edge.
-            *progress = SearchProgress::up_to(buf, buf.len());
-        }
-        found
     }
 
     #[inline]

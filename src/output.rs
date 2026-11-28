@@ -12,6 +12,10 @@ use crate::{
     scanning::SegmentBuf,
 };
 
+mod closed;
+
+pub use closed::on_stdout_closed;
+
 pub type OutputStream = Box<dyn Write + Send + Sync>;
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

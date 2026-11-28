@@ -92,13 +92,6 @@ fn test_from_config_error() {
 }
 
 #[test]
-fn test_from_notify_error() {
-    let notify_err = notify::Error::path_not_found();
-    let err = Error::from(notify_err);
-    assert_matches!(err, Error::NotifyError(boxed_err) if !boxed_err.to_string().is_empty());
-}
-
-#[test]
 fn test_from_pest_error() {
     // Create a simple pest error for testing
     let pest_err = pest::error::Error::<crate::query::Rule>::new_from_pos(

@@ -2,7 +2,7 @@
 use std::{
     cmp::min,
     convert::TryInto,
-    fs::{self, File, Metadata},
+    fs::{self, File, Metadata, OpenOptions},
     io::{self, BufRead, BufReader, Cursor, Read, Seek, SeekFrom, Write, stdin},
     mem::size_of_val,
     ops::{Deref, Range},
@@ -93,8 +93,27 @@ impl InputReference {
     /// Preliminarily opens the input file to ensure it exists and is readable
     /// and protect it from being suddenly deleted while we need it.
     pub fn hold(&self) -> io::Result<InputHolder> {
-        let (reference, stream): (_, Option<Box<dyn ReadSeekMeta + Send + Sync>>) = match self {
-            Self::Stdin => (self.clone(), None),
+        self.hold_with(&OpenOptions::new())
+    }
+
+    /// Holds the input as [`InputReference::hold`] does, for following it.
+    ///
+    /// A FIFO is opened without waiting for a writer, as following reads it across writers, and so that the other
+    /// inputs are followed meanwhile, as with `tail -F`.
+    pub fn hold_for_follow(&self) -> io::Result<InputHolder> {
+        #[cfg_attr(not(unix), allow(unused_mut))]
+        let mut options = OpenOptions::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NONBLOCK);
+        }
+        self.hold_with(&options)
+    }
+
+    fn hold_with(&self, options: &OpenOptions) -> io::Result<InputHolder> {
+        match self {
+            Self::Stdin => Ok(InputHolder::new(self.clone(), None)),
             Self::File(path) => {
                 let meta = fs::metadata(&path.canonical).map_err(|e| {
                     io::Error::new(
@@ -108,16 +127,18 @@ impl InputReference {
                         format!("{} is a directory", self.description()),
                     ));
                 }
-                let stream =
-                    Box::new(File::open(&path.canonical).map_err(|e| {
+                let file =
+                    options.clone().read(true).open(&path.canonical).map_err(|e| {
                         io::Error::new(e.kind(), format!("failed to open {}: {}", self.description(), e))
-                    })?);
+                    })?;
 
-                (InputReference::File(path.clone()), Some(stream))
+                Ok(InputHolder {
+                    reference: self.clone(),
+                    stream: None,
+                    file: Some(file),
+                })
             }
-        };
-
-        Ok(InputHolder::new(reference, stream))
+        }
     }
 
     /// Completely opens the input for reading.
@@ -244,12 +265,31 @@ type InputStream = Box<dyn ReadSeekMeta + Send + Sync>;
 pub struct InputHolder {
     pub reference: InputReference,
     pub stream: Option<InputStream>,
+    /// The file held open, if there is no `stream`.
+    file: Option<File>,
 }
 
 impl InputHolder {
     /// Creates a new input holder.
     pub fn new(reference: InputReference, stream: Option<InputStream>) -> Self {
-        Self { reference, stream }
+        Self {
+            reference,
+            stream,
+            file: None,
+        }
+    }
+
+    /// Returns the file held open, if the input was held by [`InputReference::hold`].
+    pub fn file(&self) -> Option<&File> {
+        self.file.as_ref()
+    }
+
+    /// Returns the file held open, if the input was held by [`InputReference::hold`], or the holder itself otherwise.
+    pub fn into_file(self) -> std::result::Result<File, Self> {
+        match self.file {
+            Some(file) => Ok(file),
+            None => Err(self),
+        }
     }
 
     /// Returns the metadata of the held stream, or of the referenced file if no stream is held.
@@ -257,17 +297,21 @@ impl InputHolder {
     /// The metadata of the held stream describes the file it was opened from, even if
     /// that file has since been renamed and another one created at its path.
     pub fn metadata(&self) -> io::Result<Option<Metadata>> {
-        match (&self.stream, &self.reference) {
-            (Some(stream), _) => stream.metadata(),
-            (None, InputReference::File(path)) => fs::metadata(&path.canonical).map(Some),
-            (None, InputReference::Stdin) => Ok(None),
+        match (&self.stream, &self.file, &self.reference) {
+            (Some(stream), _, _) => stream.metadata(),
+            (None, Some(file), _) => file.metadata().map(Some),
+            (None, None, InputReference::File(path)) => fs::metadata(&path.canonical).map(Some),
+            (None, None, InputReference::Stdin) => Ok(None),
         }
     }
 
     /// Opens the input file for reading.
     /// This includes decoding compressed files if needed.
     pub fn open(self) -> io::Result<Input> {
-        let stream = Self::stream(&self.reference, self.stream)?;
+        let stream = self
+            .stream
+            .or_else(|| self.file.map(|file| Box::new(file) as InputStream));
+        let stream = Self::stream(&self.reference, stream)?;
         Ok(Input::new(self.reference, stream))
     }
 
@@ -288,7 +332,7 @@ impl InputHolder {
             },
             InputReference::File(_) => match stream {
                 Some(stream) => Stream::RandomAccess(stream),
-                None => Stream::RandomAccess(reference.hold()?.stream.unwrap()),
+                None => Stream::RandomAccess(Box::new(reference.hold()?.file.unwrap())),
             },
         })
     }
@@ -352,7 +396,25 @@ impl Input {
         Ok(self)
     }
 
+    /// A file that cannot be seeked from its end, as in procfs, or that is shorter than its size, as in sysfs, is read
+    /// from its start to find its last entries, as `tail` does for a file whose size it cannot rely on.
     fn seek_tail(stream: &mut RandomAccessStream, entries: u64, delimiter: Delimiter) -> io::Result<()> {
+        let pos = match Self::tail_position(stream, entries, delimiter.clone()) {
+            Ok(pos) => pos,
+            Err(err) if matches!(err.kind(), io::ErrorKind::InvalidInput | io::ErrorKind::UnexpectedEof) => {
+                stream.seek(SeekFrom::Start(0))?;
+                let mut data = Vec::new();
+                stream.read_to_end(&mut data)?;
+                Self::tail_position(&mut Cursor::new(data), entries, delimiter)?
+            }
+            Err(err) => return Err(err),
+        };
+        stream.seek(SeekFrom::Start(pos))?;
+        Ok(())
+    }
+
+    /// Returns the position of the last `entries` entries of `stream`, found by reading it backwards from its end.
+    fn tail_position<S: Read + Seek>(stream: &mut S, entries: u64, delimiter: Delimiter) -> io::Result<u64> {
         const BUF_SIZE: usize = 64 * 1024;
         let searcher = delimiter.into_searcher();
         let mut scratch = [0; BUF_SIZE];
@@ -377,8 +439,7 @@ impl Input {
                 }
                 count += 1;
                 if count == entries {
-                    stream.seek(SeekFrom::Start(pos + i.end as u64))?;
-                    return Ok(());
+                    return Ok(pos + i.end as u64);
                 }
                 r = i.start;
             }
@@ -390,8 +451,7 @@ impl Input {
                 pos += i as u64;
             }
         }
-        stream.seek(SeekFrom::Start(pos))?;
-        Ok(())
+        Ok(pos)
     }
 }
 
@@ -504,6 +564,13 @@ impl Meta for Stream {
 pub struct TaggedStream<R> {
     reference: InputReference,
     stream: R,
+}
+
+impl<R> TaggedStream<R> {
+    /// Returns `stream`, whose errors name the input of `reference`.
+    pub fn new(reference: InputReference, stream: R) -> Self {
+        Self { reference, stream }
+    }
 }
 
 impl<R> Deref for TaggedStream<R> {

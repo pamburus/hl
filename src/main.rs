@@ -3,7 +3,7 @@ use std::{
     default::Default,
     io::{IsTerminal, Write, stdin, stdout},
     path::PathBuf,
-    process,
+    process::ExitCode,
     sync::Arc,
     time::Duration,
 };
@@ -24,7 +24,7 @@ use hl::{
     datefmt::LinuxDateFormat,
     error::*,
     help,
-    input::InputReference,
+    input::{InputHolder, InputPath, InputReference},
     output::{OutputDelimiter, OutputStream},
     pager::{PagerRole, PagerSelector, PagerWatcher},
     query::Query,
@@ -299,7 +299,15 @@ fn run() -> Result<()> {
             if x.to_str() == Some("-") {
                 Ok::<_, std::io::Error>(InputReference::Stdin)
             } else {
-                Ok(InputReference::File(x.clone().try_into()?))
+                match InputPath::resolve(x.clone()) {
+                    Ok(path) => Ok(InputReference::File(path)),
+                    // As with `tail -F`, a path that cannot be resolved yet is waited for in follow mode.
+                    Err(err) if opt.follow => {
+                        log::debug!("waiting for {}: {err}", x.display());
+                        Ok(InputReference::File(InputPath::ephemeral(x.clone())))
+                    }
+                    Err(err) => Err(err),
+                }
             }
         })
         .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -315,7 +323,24 @@ fn run() -> Result<()> {
     log::debug!("holding {n} inputs");
     let inputs = inputs
         .into_iter()
-        .map(|input| input.hold().map_err(Error::Io))
+        .map(|input| {
+            let held = if opt.follow {
+                input.hold_for_follow()
+            } else {
+                input.hold()
+            };
+            (input, held)
+        })
+        .map(|(input, held)| match held {
+            Ok(holder) => Ok(holder),
+            // As with `tail -F`, a file that cannot be opened yet is waited for in follow mode, and so is a directory,
+            // until a file takes its place (FR-026).
+            Err(err) if opt.follow => {
+                log::debug!("waiting for {}: {err}", input.description());
+                Ok(InputHolder::new(input, None))
+            }
+            Err(err) => Err(Error::Io(err)),
+        })
         .collect::<Result<Vec<_>>>()?;
 
     let mut _pager_watcher = None;
@@ -328,17 +353,24 @@ fn run() -> Result<()> {
                 _pager_watcher = pager.detach_process().map(|p| {
                     log::debug!("monitoring pager process");
                     AsyncDrop::new(PagerWatcher::new(p, |result| match result {
-                        Ok(()) => process::exit(0),
+                        Ok(()) => hl::exit(0),
                         Err(err) => {
                             let err: Error = err.into();
                             err.log(&AppInfo);
-                            process::exit(1);
+                            hl::exit(1);
                         }
                     }))
                 });
                 (Box::new(pager), true)
             }
-            None => (Box::new(stdout()), false),
+            None => {
+                // Following may write nothing for a long time, so a closed output would otherwise be found only at
+                // the next write. It exits the same way as on a failed write to the standard output.
+                if opt.follow && hl::output::on_stdout_closed(|| hl::exit(0)) {
+                    log::debug!("monitoring standard output");
+                }
+                (Box::new(stdout()), false)
+            }
         },
     };
 
@@ -429,12 +461,13 @@ fn run() -> Result<()> {
     )
 }
 
-fn main() {
+fn main() -> ExitCode {
     if let Err(err) = run() {
         err.log(&AppInfo);
-        process::exit(1);
+        return ExitCode::FAILURE;
     }
     log::info!("shutdown complete");
+    ExitCode::SUCCESS
 }
 
 struct AppInfo;
@@ -466,7 +499,7 @@ impl<W> ExitOnWriteError<W> {
             // Exit with 141 (128 + SIGPIPE) when writing to pager fails
             // This matches git and other tools' behavior
             let exit_code = if using_pager { 141 } else { 0 };
-            process::exit(exit_code);
+            hl::exit(exit_code);
         })
     }
 }

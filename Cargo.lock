@@ -1016,6 +1016,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fsmon"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
+ "notify",
+ "rstest",
+ "tempfile",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1182,7 +1194,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hl"
-version = "0.37.0-alpha.28"
+version = "0.37.0-alpha.29"
 dependencies = [
  "anstream",
  "anyhow",
@@ -1190,6 +1202,7 @@ dependencies = [
  "base32",
  "byte-strings",
  "bytefmt",
+ "bzip2",
  "capnp",
  "capnpc",
  "chrono",
@@ -1223,6 +1236,7 @@ dependencies = [
  "flate2",
  "fnv",
  "foldhash",
+ "fsmon",
  "heapless",
  "heapopt",
  "hex",
@@ -1230,7 +1244,6 @@ dependencies = [
  "itertools 0.15.0",
  "itoa",
  "known-folders",
- "kqueue",
  "libc",
  "liblzma",
  "lifecycle",
@@ -1241,7 +1254,6 @@ dependencies = [
  "mline",
  "mockall",
  "nonzero_ext",
- "notify",
  "num_cpus",
  "once_cell",
  "owo-colors",

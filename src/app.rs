@@ -3,7 +3,7 @@ use std::{
     cmp::{Reverse, max},
     convert::{TryFrom, TryInto},
     fs,
-    io::{BufWriter, Cursor, Read, Write},
+    io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write},
     num::NonZeroUsize,
     ops::Range,
     path::PathBuf,
@@ -16,6 +16,7 @@ use std::{
 use closure::closure;
 use crossbeam_channel::{self as channel, Receiver, RecvTimeoutError, Sender};
 use crossbeam_utils::thread;
+use deko::bufread::AnyDecoder;
 use enumset::{EnumSet, enum_set};
 use enumset_ext::EnumSetExt;
 use itertools::{Itertools, izip};
@@ -29,22 +30,19 @@ use crate::{
     appdirs::AppDirs,
     datefmt::{DateTimeFormat, DateTimeFormatter},
     error::*,
-    fileid::MetadataExt,
     filtering::{MatchOptions, NoNormalizing},
     fmtx::{Adjustment, Alignment, Padding, aligned},
     formatting::{
         DynRecordWithSourceFormatter, Expansion, RawRecordFormatter, RecordFormatterBuilder, RecordWithSourceFormatter,
     },
-    fsmon::{self, EventKind},
     help,
     index::{Indexer, IndexerSettings, Timestamp},
-    input::{BlockEntry, Input, InputDescriptor, InputHolder, InputReference},
+    input::{BlockEntry, InputDescriptor, InputHolder, InputReference, Stream, TaggedStream},
     model::{Filter, Origin, Parser, ParserSettings, RawRecord, Record, RecordFilter, RecordWithSourceConstructor},
     output::{BufFactory, Chunk, OutputBuf},
     query::Query,
     scanning::{
-        Delimit, Delimiter, Newline, PartialPlacement, Scanner, Search, SearchExt, SearchProgress, Segment, SegmentBuf,
-        SegmentBufFactory,
+        Delimit, Delimiter, Newline, PartialPlacement, Scanner, SearchExt, Segment, SegmentBuf, SegmentBufFactory,
     },
     settings::{AsciiMode, ExpansionMode, FieldShowOption, Fields, Formatting, InputInfo, ResolvedPunctuation},
     theme::{Element, StylingPush, SyncIndicatorPack, Theme},
@@ -648,6 +646,8 @@ impl App {
         let parser = self.parser();
         let sfi = Arc::new(SegmentBufFactory::new(self.options.buffer_size.into()));
         let bfo = Arc::new(BufFactory::new(self.options.buffer_size.into()));
+        let follow = fsmon::Follow::new(fsmon::FollowOptions::default())?;
+        let stopper = follow.stopper();
 
         thread::scope(|scope| -> Result<()> {
             // prepare receive/transmit channels for input data
@@ -657,67 +657,18 @@ impl App {
             // spawn reader threads
             let mut readers = Vec::with_capacity(m);
             for (i, holder) in inputs.into_iter().enumerate() {
-                let delimiter = &self.options.delimiter;
-                let reader = scope.spawn(closure!(clone sfi, clone txi, |_| -> Result<()> {
-                    let scanner = Scanner::new(sfi.clone(), delimiter.clone());
-                    let input_ref = holder.reference.clone();
-                    // The file read is the one opened before, which may already be
-                    // rotated, so its replacement is detected by its own metadata.
-                    let mut meta = holder.metadata()?;
-                    let mut input = holder.open()?.tail(self.options.tail, delimiter.clone())?;
-                    let is_file = |meta: &Option<fs::Metadata>| meta.as_ref().map(|m|m.is_file()).unwrap_or(false);
-                    let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), self.options.max_message_size.into());
-                    blocks.start(input.position()?);
-                    let mut input = Some(input);
-                    // Only a regular file is scanned again when it grows, so only there
-                    // an unterminated tail is held back to be completed by the next scan.
-                    // Without an input, a tail held from the previous one is flushed.
-                    let mut process = |input: &mut Option<Input>, is_file: bool| {
-                        if let Some(input) = input {
-                            blocks.scan(&mut input.stream.as_sequential(), i, &txi, is_file)?;
-                            Ok(!is_file)
-                        } else {
-                            blocks.scan(&mut std::io::empty(), i, &txi, false)?;
-                            // The next input is a newly opened file read from its start.
-                            blocks.start(0);
-                            Ok(false)
+                let reader = scope.spawn(
+                    closure!(clone sfi, clone txi, ref follow, ref stopper, |_| -> Result<()> {
+                        let result = self.follow_input(follow, holder, &sfi, i, &txi);
+                        // An error ends following, as a read error does with `tail -F`, while one opening a file is
+                        // waited out in the input itself. It is reported only once all the inputs end, so the others
+                        // are stopped.
+                        if result.is_err() {
+                            stopper.stop();
                         }
-                    };
-                    if let InputReference::File(path) = &input_ref {
-                        if process(&mut input, is_file(&meta))? {
-                            return Ok(())
-                        }
-                        fsmon::run(vec![path.canonical.clone()], |event| {
-                            match event.kind {
-                                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Any | EventKind::Other => {
-                                    if let (Some(old_meta), Ok(new_meta)) = (&meta, fs::metadata(&path.canonical)) {
-                                        let replaced = old_meta.len() > new_meta.len() || old_meta.file_id() != new_meta.file_id();
-                                        if replaced && input.is_some() {
-                                            // The rest of the old file will not come, flush its tail.
-                                            input = None;
-                                            process(&mut input, false)?;
-                                        }
-                                        meta = Some(new_meta);
-                                    }
-                                    if input.is_none() {
-                                        input = input_ref.open().ok();
-                                    }
-                                    if process(&mut input, is_file(&meta))? {
-                                        return Ok(())
-                                    }
-                                    Ok(())
-                                }
-                                EventKind::Remove(_) => {
-                                    input = None;
-                                    process(&mut input, false).map(|_| ())
-                                },
-                                EventKind::Access(_) => Ok(()),
-                            }
-                        })
-                    } else {
-                        process(&mut input, is_file(&meta)).map(|_|())
-                    }
-                }));
+                        result
+                    }),
+                );
                 readers.push(reader);
             }
             drop(txi);
@@ -735,22 +686,109 @@ impl App {
             drop(txo);
 
             // spawn merger thread
-            let merger = scope.spawn(|_| -> Result<()> { self.merge_segments(&badges, rxo, output, n) });
+            let merger = scope.spawn(|_| -> Result<()> {
+                let result = self.merge_segments(&badges, rxo, output, n);
+                // Nothing more can be shown, so the inputs are not followed any further.
+                stopper.stop();
+                result
+            });
 
-            for reader in readers {
-                reader.join().unwrap()?;
-            }
+            let read = readers.into_iter().map(|reader| reader.join().unwrap()).collect_vec();
 
             for worker in workers {
                 worker.join().unwrap();
             }
 
+            // An error of the merger is reported first, as it stops the inputs, which may fail because of that.
             merger.join().unwrap()?;
-
-            Ok(())
+            read.into_iter().collect()
         })
         .unwrap()?;
 
+        Ok(())
+    }
+
+    /// Reads the input `i` of a follow, sending its segments to `txi`, until it ends or the follow stops.
+    ///
+    /// A followed file delivers a stream per file that appears at its path, the first one from its tail, and each of
+    /// the others from its start. A compressed file is decoded, and so are the standard input and a FIFO, as when they
+    /// are not followed.
+    fn follow_input(
+        &self,
+        follow: &fsmon::Follow,
+        holder: InputHolder,
+        sfi: &Arc<SegmentBufFactory>,
+        i: usize,
+        txi: &Sender<(usize, usize, u64, Segment)>,
+    ) -> Result<()> {
+        let delimiter = &self.options.delimiter;
+        let scanner = Scanner::new(sfi.clone(), delimiter.clone());
+        let mut blocks = BlockScanner::new(&scanner, self.options.max_message_size.into());
+        let reference = holder.reference.clone();
+        let context =
+            |e: io::Error| io::Error::new(e.kind(), format!("failed to follow {}: {e}", reference.description()));
+
+        let (mut input, mut start, mut decode) = match (&holder.reference, holder.file()) {
+            (InputReference::Stdin, _) if holder.stream.is_none() => (follow.add_stdin(), 0, true),
+            (InputReference::File(path), Some(file)) => {
+                // A link is followed as given, so that it is resolved again once it points at another file, as with `tail -F`.
+                let path = path.original.clone();
+                if holder.metadata().map_err(context)?.is_some_and(|meta| meta.is_file()) {
+                    // The clone shares the position of the file, so it is where the tail starts.
+                    let mut file = file.try_clone().map_err(context)?;
+                    let mut input = holder
+                        .open()
+                        .and_then(|input| input.tail(self.options.tail, delimiter.clone()))
+                        .map_err(context)?;
+                    let position = input.position().map_err(context)?;
+                    // A compressed file is decoded as a sequential stream, from its start.
+                    let decode = matches!(input.stream, Stream::Sequential(_));
+                    drop(input);
+                    let start = if decode {
+                        file.seek(SeekFrom::Start(0)).map_err(context)?
+                    } else {
+                        position
+                    };
+                    (follow.add_file(&path, file).map_err(context)?, start, decode)
+                } else {
+                    let file = holder.into_file().ok().expect("the file is held");
+                    (follow.add_file(&path, file).map_err(context)?, 0, true)
+                }
+            }
+            // A file that could not be opened as following started is waited for, and read from its start once it can
+            // be, as with `tail -F`.
+            (InputReference::File(path), None) if holder.stream.is_none() => {
+                (follow.add_path_from_start(&path.original).map_err(context)?, 0, true)
+            }
+            // A stream given as is, rather than held by its reference, is read once to its end.
+            _ => {
+                let mut input = holder.open()?.tail(self.options.tail, delimiter.clone())?;
+                blocks.start(input.position()?);
+                return blocks.scan(&mut input.stream.as_sequential(), i, txi);
+            }
+        };
+
+        while let Some(stream) = input.next_stream().map_err(context)? {
+            blocks.start(start);
+            start = 0;
+            // An unterminated entry at the end of a stream is complete, as nothing more can come to finish it, and so
+            // is one at the end of the decoded data.
+            if decode {
+                let mut decoder = AnyDecoder::new(BufReader::new(stream));
+                blocks.scan(&mut TaggedStream::new(reference.clone(), &mut decoder), i, txi)?;
+                // The decoded data of some formats, such as bzip2, ends where the compressed data does, which may come
+                // before the end of the file, whose rest is skipped, so that the file is not taken as replaced and
+                // read again.
+                io::copy(
+                    &mut TaggedStream::new(reference.clone(), decoder.get_mut()),
+                    &mut io::sink(),
+                )?;
+            } else {
+                blocks.scan(&mut TaggedStream::new(reference.clone(), stream), i, txi)?;
+            }
+            // The file that takes the place of this one is read from its start, and may be compressed.
+            decode = true;
+        }
         Ok(())
     }
 
@@ -1217,42 +1255,29 @@ impl RecordObserver for RecordIgnorer {
 
 // ---
 
-/// Scans an input stream into segments and sends them numbered by block index.
+/// Scans the streams of an input into segments and sends them numbered by block index.
 ///
-/// In follow mode a fresh scan starts on every filesystem event, resuming the
-/// same open stream where the previous one stopped at end of file. The counter
-/// therefore lives here and keeps counting across scans: it is part of the
-/// merge window key `(ts, input, block, offset)`, and restarting it makes lines
-/// of different scans collide on one key, where all but the last are lost.
-///
-/// For the same reason it also keeps the unterminated tail of the stream: end of
-/// file in the middle of a line usually means the writer has not finished it
-/// yet, so the tail is held back and prepended to the data of the next scan.
-/// A tail too long to be held is a part of a log entry too large to be read at
-/// once. It is passed on, and the entry is left open to be continued by the next scan.
+/// A followed input delivers a stream per file that appears at its path, so the
+/// counter lives here and keeps counting across streams: it is part of the
+/// merge window key `(ts, input, block, offset)`, and restarting it makes entries
+/// of different streams collide on one key, where all but the last are lost.
 ///
 /// Each segment is also sent with its byte offset in the stream, which keeps
-/// counting across scans until [`BlockScanner::start`] starts a new stream.
-struct BlockScanner<'a, D: Delimit> {
+/// counting until [`BlockScanner::start`] starts a new stream.
+struct BlockScanner<'a, D> {
     scanner: &'a Scanner<D>,
-    searcher: D::Searcher,
     max_segment_size: usize,
     block: usize,
     offset: u64,
-    tail: HeldTail,
-    open: bool,
 }
 
 impl<'a, D: Delimit> BlockScanner<'a, D> {
-    fn new(scanner: &'a Scanner<D>, delimiter: D, max_segment_size: usize) -> Self {
+    fn new(scanner: &'a Scanner<D>, max_segment_size: usize) -> Self {
         Self {
             scanner,
-            searcher: delimiter.into_searcher(),
             max_segment_size,
             block: 0,
             offset: 0,
-            tail: HeldTail::default(),
-            open: false,
         }
     }
 
@@ -1263,179 +1288,26 @@ impl<'a, D: Delimit> BlockScanner<'a, D> {
         self.offset = offset;
     }
 
-    /// Scans the held tail followed by `stream` up to its end.
+    /// Scans `stream` up to its end, sending all its data, including an unterminated entry at its end, and each entry
+    /// as soon as it is read, as the stream is still written to.
     ///
-    /// With `hold_tail`, the data after the last delimiter is held back for the
-    /// next scan instead of being sent as a complete segment, and a log entry too
-    /// large to be read at once is left open. Without it, all data is sent, which
-    /// also flushes a tail held by a previous scan and ends an entry left open.
-    fn scan(
-        &mut self,
-        stream: &mut dyn Read,
-        i: usize,
-        txi: &Sender<(usize, usize, u64, Segment)>,
-        hold_tail: bool,
-    ) -> Result<()> {
-        let tail = std::mem::take(&mut self.tail);
-        let mut holding = None;
-        let mut chained = None;
-        let reader: &mut dyn Read = if hold_tail {
-            holding.insert(TailHoldingReader::new(
-                tail,
-                stream,
-                &self.searcher,
-                self.max_segment_size,
-            ))
-        } else {
-            chained.insert(Cursor::new(tail.data).chain(stream))
-        };
+    /// It stops early, without an error, once the receiver is gone.
+    fn scan(&mut self, stream: &mut dyn Read, i: usize, txi: &Sender<(usize, usize, u64, Segment)>) -> Result<()> {
         let items = self
             .scanner
-            .items(reader)
-            .continuing(self.open)
-            .open_ended(hold_tail)
+            .items(stream)
+            .live()
             .with_max_segment_size(self.max_segment_size);
-        let mut position = (&mut self.block, &mut self.offset);
-        let mut open = self.open;
         for item in items {
-            let item = item?;
-            open = matches!(
-                item,
-                Segment::Incomplete(_, PartialPlacement::First | PartialPlacement::Next, _)
-            );
-            if !Self::send(&mut position, item, i, txi) {
+            let segment = item?;
+            let len = segment.data().len();
+            if txi.send((i, self.block, self.offset, segment)).is_err() {
                 break;
             }
-        }
-        self.open = open;
-        if let Some(reader) = holding {
-            self.tail = reader.into_tail();
+            self.block += 1;
+            self.offset += len as u64;
         }
         Ok(())
-    }
-
-    /// Sends `segment` at the block number and offset of `position`, and advances them if it was received.
-    fn send(
-        (block, offset): &mut (&mut usize, &mut u64),
-        segment: Segment,
-        i: usize,
-        txi: &Sender<(usize, usize, u64, Segment)>,
-    ) -> bool {
-        let len = segment.data().len();
-        if txi.send((i, **block, **offset, segment)).is_err() {
-            return false;
-        }
-        **block += 1;
-        **offset += len as u64;
-        true
-    }
-}
-
-// ---
-
-/// Data held back by a [`TailHoldingReader`] for the next scan, with what its search for the delimiter found out.
-#[derive(Default)]
-struct HeldTail {
-    data: Vec<u8>,
-    progress: SearchProgress,
-}
-
-// ---
-
-/// Reads a previously held tail followed by an inner stream, and holds back the
-/// data after the last delimiter once the inner stream reaches its end.
-///
-/// The held data stops growing at `limit` bytes after the last delimiter: a line
-/// that long is passed on even if unterminated, as the scanner would split it
-/// into parts anyway.
-///
-/// The held data is searched for the delimiter only where it has grown since it was last searched,
-/// in this or a previous scan, as a tail that grows to the limit would otherwise be searched again
-/// with each chunk read.
-struct TailHoldingReader<'a, S> {
-    inner: &'a mut dyn Read,
-    searcher: &'a S,
-    limit: usize,
-    buf: Vec<u8>,
-    // `buf[pos..ready]` can be passed on, `buf[ready..]` is held back.
-    pos: usize,
-    ready: usize,
-    // What the search for the delimiter in `buf` found out, see [`Search::search_r_incremental`].
-    progress: SearchProgress,
-}
-
-impl<'a, S: Search> TailHoldingReader<'a, S> {
-    const CHUNK_SIZE: usize = 64 * 1024;
-
-    /// Returns a reader of `tail` followed by `inner`.
-    fn new(tail: HeldTail, inner: &'a mut dyn Read, searcher: &'a S, limit: usize) -> Self {
-        Self {
-            inner,
-            searcher,
-            limit,
-            buf: tail.data,
-            pos: 0,
-            ready: 0,
-            progress: tail.progress,
-        }
-    }
-
-    /// Returns the data that has not been read.
-    fn into_tail(mut self) -> HeldTail {
-        self.drop_read();
-        HeldTail {
-            data: self.buf,
-            progress: self.progress,
-        }
-    }
-
-    /// Drops the data that has been read.
-    fn drop_read(&mut self) {
-        if self.pos != 0 {
-            self.buf.drain(..self.pos);
-            self.ready -= self.pos;
-            self.pos = 0;
-            // The search depends on the data before a delimiter, so what it found out no longer holds.
-            self.progress = SearchProgress::default();
-        }
-    }
-}
-
-impl<S: Search> Read for TailHoldingReader<'_, S> {
-    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
-        // Nothing can be passed on to an empty buffer, so the inner stream is left for the next read.
-        if out.is_empty() {
-            return Ok(0);
-        }
-
-        while self.pos == self.ready {
-            self.drop_read();
-
-            let len = self.buf.len();
-            self.buf.resize(len + Self::CHUNK_SIZE, 0);
-            let n = self.inner.read(&mut self.buf[len..]);
-            self.buf.truncate(len + n.as_ref().copied().unwrap_or(0));
-            if n? == 0 {
-                return Ok(0);
-            }
-
-            let found = self.searcher.search_r_incremental(&self.buf, &mut self.progress);
-            if found.is_some() {
-                // The next search starts over, whether or not the data before the delimiter is read by then.
-                self.progress = SearchProgress::default();
-            }
-            let end = found.map(|r| r.end).unwrap_or(0);
-            self.ready = if self.buf.len() - end >= self.limit {
-                self.buf.len()
-            } else {
-                end
-            };
-        }
-
-        let n = out.len().min(self.ready - self.pos);
-        out[..n].copy_from_slice(&self.buf[self.pos..self.pos + n]);
-        self.pos += n;
-        Ok(n)
     }
 }
 
@@ -1451,8 +1323,7 @@ fn flush_wait(received: Instant, now: Instant, sync_interval: Duration) -> Durat
 ///
 /// The merger counts only the data toward its memory limit, so a part is sent in its own buffer only if it fills most of it,
 /// as a part in the middle usually does. Any other part is copied into a buffer of its size: the first part, which also gets
-/// `prefix`, the last part, which loses its trailing `delimiter` and a line break before it, see [`last_part_len`], and a part
-/// in the middle cut short by the end of a file still being written.
+/// `prefix`, and the last part, which loses its trailing `delimiter` and a line break before it, see [`last_part_len`].
 fn split_entry_part(segment: SegmentBuf, part: PartialPlacement, delimiter: usize, prefix: &str) -> OutputBuf {
     if part == PartialPlacement::Next && segment.len() * 2 >= segment.capacity() {
         return segment.into_data().into();

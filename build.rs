@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant};
 
 // third-party imports
@@ -25,11 +25,12 @@ const BUILD_CAPNP_DIR: &str = ".build/capnp";
 const MAX_FETCH_ATTEMPTS: u32 = 3;
 const BASE_FETCH_TIMEOUT: Duration = Duration::from_secs(2);
 
-fn main() {
+fn main() -> ExitCode {
     if let Err(e) = run() {
         eprintln!("{:?}", e);
-        std::process::exit(1);
+        return ExitCode::FAILURE;
     }
+    ExitCode::SUCCESS
 }
 
 fn run() -> Result<()> {

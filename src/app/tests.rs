@@ -21,7 +21,7 @@ use crate::{
     level::{InfallibleLevel, Level},
     model::{FieldFilterSet, RecordWithSource},
     output::{BufFactory, OutputBuf},
-    scanning::{NewlineSearcher, PartialPlacement, SearchProgress, Segment, SegmentBuf, SegmentBufFactory},
+    scanning::{PartialPlacement, Segment, SegmentBuf, SegmentBufFactory},
     settings::{self, AsciiMode, DisplayVariant, ExpansionMode, MessageFormat, MessageFormatting},
     syntax::*,
     themecfg,
@@ -241,82 +241,51 @@ fn merge(sync_interval: Duration, messages: Vec<Processed>) -> String {
     String::from_utf8(output).unwrap()
 }
 
-/// A new line delimiter that counts the bytes searched for it.
-#[derive(Clone, Default)]
-struct CountingNewline(Arc<AtomicUsize>);
+/// A stream that returns each of its chunks in a read of its own, as a followed file does with data appended to it between reads.
+struct ChunkedReader(std::collections::VecDeque<Vec<u8>>);
 
-impl CountingNewline {
-    fn searched(&self) -> usize {
-        self.0.load(Ordering::Relaxed)
-    }
-
-    fn count(&self, buf: &[u8]) {
-        self.0.fetch_add(buf.len(), Ordering::Relaxed);
+impl ChunkedReader {
+    fn new(chunks: &[&[u8]]) -> Self {
+        Self(chunks.iter().map(|chunk| chunk.to_vec()).collect())
     }
 }
 
-impl Delimit for CountingNewline {
-    type Searcher = Self;
-
-    fn into_searcher(self) -> Self {
-        self
+impl Read for ChunkedReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let Some(chunk) = self.0.front_mut() else {
+            return Ok(0);
+        };
+        let n = chunk.len().min(buf.len());
+        buf[..n].copy_from_slice(&chunk[..n]);
+        chunk.drain(..n);
+        if chunk.is_empty() {
+            self.0.pop_front();
+        }
+        Ok(n)
     }
 }
 
-impl Search for CountingNewline {
-    fn search_r(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        self.count(buf);
-        NewlineSearcher.search_r(buf, edge)
+/// Returns the entries of `segments`, with the parts of an entry too long for a segment joined into one.
+///
+/// Panics if the parts of an entry do not end with a last one.
+fn joined_entries(segments: impl IntoIterator<Item = Segment>) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut open: Option<String> = None;
+    for segment in segments {
+        match segment {
+            Segment::Complete(buf) => entries.push(String::from_utf8_lossy(buf.data()).into_owned()),
+            Segment::Incomplete(buf, placement, _) => {
+                let part = String::from_utf8_lossy(buf.data());
+                let entry = open.get_or_insert_default();
+                entry.push_str(&part);
+                if placement == PartialPlacement::Last {
+                    entries.extend(open.take());
+                }
+            }
+        }
     }
-
-    fn search_r_incremental(&self, buf: &[u8], progress: &mut SearchProgress) -> Option<Range<usize>> {
-        self.count(&buf[progress.end()..]);
-        NewlineSearcher.search_r_incremental(buf, progress)
-    }
-
-    fn search_l(&self, buf: &[u8], edge: bool) -> Option<Range<usize>> {
-        self.count(buf);
-        NewlineSearcher.search_l(buf, edge)
-    }
-
-    fn partial_match_r(&self, buf: &[u8]) -> Option<usize> {
-        NewlineSearcher.partial_match_r(buf)
-    }
-
-    fn partial_match_l(&self, buf: &[u8]) -> Option<usize> {
-        NewlineSearcher.partial_match_l(buf)
-    }
-}
-
-/// Scans each chunk as a separate follow mode scan and returns the segments sent after each of them.
-fn scan_segments(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<Segment>> {
-    let sfi = Arc::new(SegmentBufFactory::new(segment_size));
-    let scanner = Scanner::new(sfi, Delimiter::default());
-    let (txi, rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), segment_size);
-
-    chunks
-        .iter()
-        .map(|&(chunk, hold_tail)| {
-            blocks
-                .scan(&mut Cursor::new(chunk.to_vec()), 0, &txi, hold_tail)
-                .unwrap();
-            rxi.try_iter().map(|(_, _, _, segment)| segment).collect_vec()
-        })
-        .collect()
-}
-
-/// Scans each chunk as a separate follow mode scan and returns the text of the
-/// segments sent after each of them.
-fn scan_chunks(segment_size: usize, chunks: &[(&[u8], bool)]) -> Vec<Vec<String>> {
-    let text = |segment: Segment| match segment {
-        Segment::Complete(buf) | Segment::Incomplete(buf, ..) => String::from_utf8_lossy(buf.data()).into_owned(),
-    };
-
-    scan_segments(segment_size, chunks)
-        .into_iter()
-        .map(|segments| segments.into_iter().map(text).collect())
-        .collect()
+    assert!(open.is_none(), "an entry has no last part: {open:?}");
+    entries
 }
 
 /// The input and byte range of a formatted record, as seen by the formatter.
@@ -2199,13 +2168,12 @@ fn test_process_segments_incomplete(
 #[rstest]
 #[case::first(b"abcdefg", 0, "> abc", false)]
 #[case::next_filling_buffer(b"abcdefg", 1, "def", true)]
-#[case::next_cut_short_by_end_of_input(b"abcdefg", 2, "g", false)]
 #[case::last(b"abcdefg\n", 2, "g", false)]
 fn test_split_entry_part(#[case] input: &[u8], #[case] n: usize, #[case] expected: &str, #[case] in_own_buffer: bool) {
     let sfi = Arc::new(SegmentBufFactory::new(3));
     let scanner = Scanner::new(sfi.clone(), b'\n');
     let mut data = Cursor::new(input);
-    let mut items = scanner.items(&mut data).open_ended(true).with_max_segment_size(3);
+    let mut items = scanner.items(&mut data).with_max_segment_size(3);
     let Some(Ok(Segment::Incomplete(segment, part, delimiter))) = items.nth(n) else {
         panic!("no part {n}");
     };
@@ -3367,26 +3335,22 @@ fn test_follow_shows_long_entry_between_records() {
 // --- BlockScanner tests ---
 
 #[test]
-fn test_block_scanner_continues_numbering_across_scans() {
-    // In follow mode a fresh scan starts on every filesystem event. Block numbers
-    // must keep growing across those scans, otherwise lines of different events
+fn test_block_scanner_continues_numbering_across_streams() {
+    // A followed input delivers a stream per file that appears at its path. Block numbers
+    // must keep growing across those streams, otherwise entries of different streams
     // collide in the merge window key and all but the last are dropped.
     //
-    // Segments are sized so that each of these lines lands in a segment of its
-    // own, which makes numbering observable within a scan as well as across scans.
+    // Segments are sized so that each of these entries lands in a segment of its
+    // own, which makes numbering observable within a stream as well as across streams.
     const SEGMENT_SIZE: usize = 3;
 
     let sfi = Arc::new(SegmentBufFactory::new(SEGMENT_SIZE));
     let scanner = Scanner::new(sfi, Delimiter::default());
     let (txi, rxi) = channel::unbounded();
 
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), SEGMENT_SIZE);
-    blocks
-        .scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi, true)
-        .unwrap();
-    blocks
-        .scan(&mut Cursor::new(b"b1\nb2\n".to_vec()), 0, &txi, true)
-        .unwrap();
+    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
+    blocks.scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi).unwrap();
+    blocks.scan(&mut Cursor::new(b"b1\nb2\n".to_vec()), 0, &txi).unwrap();
     drop(txi);
 
     let text = |segment: &Segment| match segment {
@@ -3419,201 +3383,36 @@ fn test_block_scanner_stops_scanning_when_receiver_is_gone() {
     let (txi, rxi) = channel::unbounded::<(usize, usize, u64, Segment)>();
     drop(rxi);
 
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), SEGMENT_SIZE);
+    let mut blocks = BlockScanner::new(&scanner, SEGMENT_SIZE);
     let mut input = Cursor::new(b"a1\na2\na3\na4\n".to_vec());
-    blocks.scan(&mut input, 0, &txi, false).unwrap();
+    blocks.scan(&mut input, 0, &txi).unwrap();
 
     // Only the first segment was read, and its failed hand-off was not counted.
     assert_eq!(input.position(), SEGMENT_SIZE as u64);
     assert_eq!(blocks.block, 0);
 }
 
-#[test]
-fn test_block_scanner_completes_line_split_across_scans() {
-    // A writer may append a single line in several writes, each of them
-    // triggering a separate scan. The unterminated end of the first write must
-    // wait for the rest of its line instead of being sent as a line of its own.
-    let scanned = scan_chunks(
-        1024,
-        &[
-            (br#"{"msg":"a"}"#.as_slice(), true),
-            (b"\n{\"msg\":\"hel", true),
-            (b"lo\"}\n", true),
-        ],
-    );
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![],
-            vec!["{\"msg\":\"a\"}\n".to_owned()],
-            vec!["{\"msg\":\"hello\"}\n".to_owned()],
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_flushes_held_tail() {
-    // When the input is replaced or ends, the held tail will not be completed
-    // and is sent as it is.
-    let scanned = scan_chunks(1024, &[(b"a1\na2", true), (b"", false)]);
-
-    assert_eq!(scanned, vec![vec!["a1\n".to_owned()], vec!["a2".to_owned()]]);
-}
-
-#[test]
-fn test_block_scanner_passes_overlong_tail() {
-    // An unterminated tail is not held back once it reaches the maximum segment
-    // size, as it would not fit in a single segment anyway.
-    let scanned = scan_chunks(4, &[(b"abcdefgh", true), (b"", true)]);
-
-    assert_eq!(scanned[0].concat(), "abcdefgh");
-    assert!(scanned[1].is_empty());
-}
-
-#[test]
-fn test_block_scanner_holds_short_tail_after_long_data() {
-    // The tail is held back by its own length, not by the length of the
-    // complete lines read along with it.
-    let scanned = scan_chunks(8, &[(b"a1\na2\na3\nb", true), (b"c\n", true)]);
-
-    assert_eq!(scanned[0].concat(), "a1\na2\na3\n");
-    assert_eq!(scanned[1], vec!["bc\n".to_owned()]);
-}
-
+/// FR-030, FR-031: an entry that reaches a stream in several reads is sent whole, also when it is longer than a segment.
 #[rstest]
-#[case::byte(Delimiter::Byte(b'\n'), b"a\n", b"a\n")]
-#[case::str(Delimiter::Str("\n".into()), b"a\n", b"a\n")]
-#[case::newline(Delimiter::Newline, b"a\n", b"a\n")]
-#[case::pretty_compatible(Delimiter::PrettyCompatible, b"a\n", b"a\n")]
-#[case::json(Delimiter::Json, b"{}\n{}", b"{}\n")]
-fn test_tail_holding_reader_keeps_delimiter_after_empty_read(
-    #[case] delimiter: Delimiter,
-    #[case] data: &[u8],
-    #[case] expected: &[u8],
+#[case::split_record(1024, &[br#"{"msg":"a"}"#.as_slice(), b"\n{\"msg\":\"hel", b"lo\"}\n"], &["{\"msg\":\"a\"}\n", "{\"msg\":\"hello\"}\n"])]
+#[case::overlong(4, &[b"x1\nabcdefgh".as_slice(), b"ijklmn", b"op\ny1\n"], &["x1\n", "abcdefghijklmnop\n", "y1\n"])]
+#[case::unterminated_at_end(1024, &[b"a1\na".as_slice(), b"2"], &["a1\n", "a2"])]
+#[case::overlong_unterminated_at_end(4, &[b"abcdefgh".as_slice(), b"ij"], &["abcdefghij"])]
+fn test_block_scanner_sends_entry_read_in_parts(
+    #[case] segment_size: usize,
+    #[case] chunks: &[&[u8]],
+    #[case] expected: &[&str],
 ) {
-    // A read into an empty buffer, as the scanner does after its last segment, keeps what
-    // it would have passed on for the next scan, which passes it on once the file grows.
-    let searcher = delimiter.into_searcher();
-    let mut inner = Cursor::new(data);
-
-    let mut reader = TailHoldingReader::new(HeldTail::default(), &mut inner, &searcher, 1024);
-    assert_eq!(reader.read(&mut []).unwrap(), 0);
-    let tail = reader.into_tail();
-
-    let mut grown = (&mut inner).chain(&b"x"[..]);
-    let mut reader = TailHoldingReader::new(tail, &mut grown, &searcher, 1024);
-    let mut out = Vec::new();
-    reader.read_to_end(&mut out).unwrap();
-    assert_eq!(out, expected);
-}
-
-#[rstest]
-fn test_block_scanner_searches_held_tail_once(#[values(1, 64)] scans: usize, #[values(false, true)] terminated: bool) {
-    // An unterminated tail held back while it grows is not searched again for the delimiter
-    // each time it grows, in a single scan or across scans.
-    const CHUNKS: usize = 64;
-    const CHUNK: usize = 64 * 1024;
-
-    let line = "x".repeat(CHUNKS * CHUNK);
-    let end = if terminated { "\n" } else { "" };
-    let delimiter = CountingNewline::default();
-    let sfi = Arc::new(SegmentBufFactory::new(CHUNK));
-    let scanner = Scanner::new(sfi, delimiter.clone());
+    let sfi = Arc::new(SegmentBufFactory::new(segment_size));
+    let scanner = Scanner::new(sfi, Delimiter::default());
     let (txi, rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, delimiter.clone(), 2 * line.len());
+    let mut blocks = BlockScanner::new(&scanner, segment_size);
 
-    let mut sent = Vec::new();
-    let data = format!("{line}{end}");
-    for chunk in data.as_bytes().chunks(data.len().div_ceil(scans)) {
-        blocks.scan(&mut Cursor::new(chunk), 0, &txi, true).unwrap();
-        sent.extend(rxi.try_iter().map(|(_, _, _, segment)| segment.data().to_vec()));
-    }
-    let held = delimiter.searched();
-    blocks.scan(&mut std::io::empty(), 0, &txi, false).unwrap();
-    sent.extend(rxi.try_iter().map(|(_, _, _, segment)| segment.data().to_vec()));
+    blocks.scan(&mut ChunkedReader::new(chunks), 0, &txi).unwrap();
+    drop(txi);
 
-    assert!(
-        held <= 2 * data.len(),
-        "{held} bytes searched to hold {} bytes",
-        data.len()
-    );
-    assert!(
-        sent.concat() == data.as_bytes(),
-        "unexpected data of {} bytes",
-        sent.concat().len()
-    );
-}
-
-#[test]
-fn test_block_scanner_continues_overlong_line_across_scans() {
-    // A line too long to be held back is passed on as it is written, but it is
-    // left open, so that the next scan continues it instead of starting a new line.
-    use PartialPlacement::*;
-
-    let scanned = scan_segments(4, &[(b"x1\nabcdefgh", true), (b"ijklmn", true), (b"op\ny1\n", true)]);
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![
-                Segment::Complete(b"x1\n".into()),
-                Segment::Incomplete(b"abcd".into(), First, 0),
-                Segment::Incomplete(b"efgh".into(), Next, 0),
-            ],
-            vec![
-                Segment::Incomplete(b"ijkl".into(), Next, 0),
-                Segment::Incomplete(b"mn".into(), Next, 0),
-            ],
-            vec![
-                Segment::Incomplete(b"op\n".into(), Last, 1),
-                Segment::Complete(b"y1\n".into()),
-            ],
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_ends_open_overlong_line_on_flush() {
-    // A short continuation is held back like any unterminated tail, and when the
-    // input is replaced or ends, it is sent as the last part of the open line.
-    use PartialPlacement::*;
-
-    let scanned = scan_segments(4, &[(b"abcdefgh", true), (b"ij", true), (b"", false), (b"x1\n", true)]);
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![
-                Segment::Incomplete(b"abcd".into(), First, 0),
-                Segment::Incomplete(b"efgh".into(), Next, 0),
-            ],
-            vec![],
-            vec![Segment::Incomplete(b"ij".into(), Last, 0)],
-            vec![Segment::Complete(b"x1\n".into())],
-        ]
-    );
-}
-
-#[test]
-fn test_block_scanner_ends_open_overlong_line_on_flush_after_whole_parts() {
-    // The open line ends right after a whole part, with nothing held back, so when the input
-    // is replaced or ends, an empty last part is sent to end it.
-    use PartialPlacement::*;
-
-    let scanned = scan_segments(4, &[(b"abcdefgh", true), (b"", false), (b"x1\n", true)]);
-
-    assert_eq!(
-        scanned,
-        vec![
-            vec![
-                Segment::Incomplete(b"abcd".into(), First, 0),
-                Segment::Incomplete(b"efgh".into(), Next, 0),
-            ],
-            vec![Segment::Incomplete(b"".into(), Last, 0)],
-            vec![Segment::Complete(b"x1\n".into())],
-        ]
-    );
+    let entries = joined_entries(rxi.iter().map(|(_, _, _, segment)| segment));
+    assert_eq!(entries, expected);
 }
 
 #[test]
@@ -3629,11 +3428,9 @@ fn test_block_scanner_propagates_read_error() {
     let sfi = Arc::new(SegmentBufFactory::new(1024));
     let scanner = Scanner::new(sfi, Delimiter::default());
     let (txi, _rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), 1024);
+    let mut blocks = BlockScanner::new(&scanner, 1024);
 
-    for hold_tail in [true, false] {
-        assert!(blocks.scan(&mut FailingReader, 0, &txi, hold_tail).is_err());
-    }
+    assert!(blocks.scan(&mut FailingReader, 0, &txi).is_err());
     assert_eq!(blocks.block, 0);
 }
 
@@ -3814,15 +3611,13 @@ fn test_block_scanner_start_sets_offsets_only() {
     let sfi = Arc::new(SegmentBufFactory::new(3));
     let scanner = Scanner::new(sfi, Delimiter::default());
     let (txi, rxi) = channel::unbounded();
-    let mut blocks = BlockScanner::new(&scanner, Delimiter::default(), 3);
+    let mut blocks = BlockScanner::new(&scanner, 3);
 
-    blocks
-        .scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi, false)
-        .unwrap();
+    blocks.scan(&mut Cursor::new(b"a1\na2\n".to_vec()), 0, &txi).unwrap();
     blocks.start(0);
-    blocks.scan(&mut Cursor::new(b"b1\n".to_vec()), 0, &txi, false).unwrap();
+    blocks.scan(&mut Cursor::new(b"b1\n".to_vec()), 0, &txi).unwrap();
     blocks.start(100);
-    blocks.scan(&mut Cursor::new(b"c1\n".to_vec()), 0, &txi, false).unwrap();
+    blocks.scan(&mut Cursor::new(b"c1\n".to_vec()), 0, &txi).unwrap();
     drop(txi);
 
     let scanned = rxi.iter().map(|(_, block, offset, _)| (block, offset)).collect_vec();

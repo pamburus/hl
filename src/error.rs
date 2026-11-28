@@ -110,8 +110,6 @@ pub enum Error {
     LogfmtParseError(#[from] logfmt::error::Error),
     #[error(transparent)]
     TryFromIntError(#[from] TryFromIntError),
-    #[error(transparent)]
-    NotifyError(Box<notify::Error>),
     #[error("failed to receive from mpsc channel: {source}")]
     RecvTimeoutError {
         #[source]
@@ -238,12 +236,6 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 impl From<ConfigError> for Error {
     fn from(err: ConfigError) -> Self {
         Error::Config(Box::new(err))
-    }
-}
-
-impl From<notify::Error> for Error {
-    fn from(err: notify::Error) -> Self {
-        Error::NotifyError(Box::new(err))
     }
 }
 

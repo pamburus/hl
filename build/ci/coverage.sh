@@ -2,7 +2,8 @@
 
 set -e
 
-export RUSTFLAGS="-C instrument-coverage"
+# The `coverage` option makes hl write the coverage data before it exits on Windows, where an exit from another thread loses it.
+export RUSTFLAGS="-C instrument-coverage --cfg coverage"
 export CARGO_TARGET_DIR="target/coverage"
 export LLVM_PROFILE_FILE="target/coverage/test-%m-%p.profraw"
 unset HL_PAGER
