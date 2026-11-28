@@ -1,5 +1,10 @@
 use super::*;
 
+use maplit::hashmap;
+
+const K8S_CONFIG: &str = include_str!("../../etc/defaults/config-k8s.toml");
+const ISSUE_288_CONFIG: &str = include_str!("../testing/assets/configs/issue-288.yaml");
+
 #[test]
 fn test_default_settings() {
     let test = |settings: &Settings| {
@@ -16,7 +21,7 @@ fn test_default_settings() {
 
 #[test]
 fn test_load_settings_k8s() {
-    let settings = Settings::load([SourceFile::new("etc/defaults/config-k8s.toml").into()]).unwrap();
+    let settings = Settings::load([Source::string(K8S_CONFIG, FileFormat::Toml)]).unwrap();
     assert_eq!(
         settings.fields.predefined.time,
         TimeField(Field {
@@ -24,9 +29,28 @@ fn test_load_settings_k8s() {
             show: FieldShowOption::Always,
         })
     );
+    assert_eq!(settings.fields.predefined.message.0.names, &["msg"]);
+    assert_eq!(settings.fields.predefined.level.variants.len(), 2);
     assert_eq!(settings.time_format, "%Y-%m-%d %T.%3N");
     assert_eq!(settings.time_zone, chrono_tz::UTC);
     assert_eq!(settings.theme, "uni");
+}
+
+#[test]
+fn test_issue_288() {
+    let settings = Settings::load([Source::string(ISSUE_288_CONFIG, FileFormat::Yaml)]).unwrap();
+    assert_eq!(settings.fields.predefined.level.variants.len(), 1);
+    let variant = &settings.fields.predefined.level.variants[0];
+    assert_eq!(variant.names, vec!["level".to_owned()]);
+    assert_eq!(
+        variant.values,
+        hashmap! {
+            InfallibleLevel::new(Level::Debug) => vec!["dbg".to_owned()],
+            InfallibleLevel::new(Level::Info) => vec!["INF".to_owned()],
+            InfallibleLevel::new(Level::Warning) => vec!["wrn".to_owned()],
+            InfallibleLevel::new(Level::Error) => vec!["ERR".to_owned()],
+        }
+    );
 }
 
 #[test]
