@@ -34,12 +34,24 @@ pub(crate) fn raw_theme(name: &str) -> RawTheme {
     load_raw_theme(name).unwrap()
 }
 
-pub(crate) fn load_yaml_fixture<T>(path: &str) -> T
+/// Parses the first item of the YAML fixture at `$path` under `src/testing/assets/fixtures/`,
+/// embedded at compile time.
+macro_rules! yaml_fixture {
+    ($path:literal) => {
+        $crate::themecfg::tests::parse_yaml_fixture(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/testing/assets/fixtures/",
+            $path
+        )))
+    };
+}
+pub(crate) use yaml_fixture;
+
+pub(crate) fn parse_yaml_fixture<T>(content: &str) -> T
 where
     T: serde::de::DeserializeOwned,
 {
-    let content = std::fs::read_to_string(PathBuf::from("src/testing/assets/fixtures").join(path)).unwrap();
-    let items: Vec<T> = yaml::from_str(&content).unwrap();
+    let items: Vec<T> = yaml::from_str(content).unwrap();
     items.into_iter().next().unwrap()
 }
 
