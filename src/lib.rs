@@ -29,9 +29,8 @@ pub mod types;
 // private modules
 mod console;
 mod eseq;
-mod fileid;
+mod exit;
 mod filtering;
-mod fsmon;
 mod model;
 mod number;
 mod pool;
@@ -41,8 +40,6 @@ mod serdex;
 mod signal_common;
 mod tee;
 mod vfs;
-#[cfg(windows)]
-mod win_file_id;
 mod xerr;
 
 // test utilities
@@ -57,6 +54,7 @@ pub mod signal;
 // public uses
 pub use app::{App, FieldOptions, Options, SegmentProcessor};
 pub use datefmt::{DateTimeFormatter, LinuxDateFormat};
+pub use exit::exit;
 pub use filtering::DefaultNormalizing;
 pub use formatting::RecordFormatter;
 pub use model::{FieldFilterSet, Filter, Level, Origin, Parser, ParserSettings, RecordFilter};

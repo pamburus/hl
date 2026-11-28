@@ -1,5 +1,4 @@
 // std imports
-use std::process::exit;
 use std::time::{Duration, Instant};
 
 // ---
@@ -22,7 +21,7 @@ pub enum SignalExitStatus {
 pub(crate) fn shutdown(signal: i32, status: SignalExitStatus) -> ! {
     let code = exit_code(signal, status);
     log::info!("shutdown complete on signal {signal}, exiting with code {code}");
-    exit(code)
+    crate::exit(code)
 }
 
 fn exit_code(signal: i32, status: SignalExitStatus) -> i32 {
