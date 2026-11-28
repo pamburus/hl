@@ -2,3 +2,4 @@
 
 pub mod hl;
 pub mod log;
+pub mod repo;

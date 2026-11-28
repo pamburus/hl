@@ -8,3 +8,4 @@ mod support;
 mod input;
 
 mod config;
+mod query;
